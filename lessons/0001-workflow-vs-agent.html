@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0001 · Workflow vs Agent</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Workflow vs Agent: la distinzione fondamentale</h1>
+<p class="kicker">Lezione 0001 — e dove si inseriscono Skill, Hook, MCP e Subagent di Claude Code</p>
+
+<p>
+Prima di costruire qualunque workflow agentico per lo sviluppo software con Claude Code, serve un asse di riferimento:
+quando stai costruendo un <strong>workflow</strong> e quando stai costruendo un <strong>agent</strong>? Anthropic li definisce
+in modo preciso nel suo articolo di riferimento<sup class="sidenote-ref">1</sup>, e questa distinzione è il primo criterio
+di design che userai ogni volta che devi scegliere tra una Skill, un Hook, un server MCP o un Subagent.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>. Fonte primaria di tutta questa lezione.</p>
+
+<h2>Il building block di base: Augmented LLM</h2>
+<p>
+Ogni pattern agentico, workflow o agent che sia, è costruito sopra lo stesso mattone: un <strong>Augmented LLM</strong> — un
+LLM potenziato con <em>retrieval</em>, <em>tools</em> e <em>memory</em>, che il modello stesso sceglie attivamente di usare
+in base al contesto<sup class="sidenote-ref">2</sup>. In Claude Code, questo potenziamento arriva soprattutto tramite
+<strong>MCP</strong> (Model Context Protocol) e i tool built-in (Read, Bash, WebFetch, ...).
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> Il modello decide <em>se</em> e <em>come</em> usare uno strumento — non è un'invocazione hardcoded. Questa è la differenza tra "tool disponibile" e "tool use" effettivo.</p>
+
+<h2>La distinzione: Workflow vs Agent</h2>
+<table>
+<tr><th></th><th>Workflow</th><th>Agent</th></tr>
+<tr>
+  <td>Definizione</td>
+  <td>LLM e tool orchestrati attraverso <strong>predefined code paths</strong> — il flusso di controllo lo scrivi tu.</td>
+  <td>L'LLM dirige <strong>dinamicamente</strong> il proprio processo e l'uso dei tool — il flusso di controllo lo decide il modello, passo dopo passo, in un loop.</td>
+</tr>
+<tr>
+  <td>Quando usarlo</td>
+  <td>Il task si scompone in sotto-task noti e fissi in anticipo. Preferisci prevedibilità e latenza controllata.</td>
+  <td>Il task è open-ended, il numero di step non è prevedibile, e ti puoi fidare del giudizio del modello passo-passo.</td>
+</tr>
+<tr>
+  <td>Costo del fallimento</td>
+  <td>Contenuto — ogni step è verificabile e ha un "gate" programmatico.</td>
+  <td>Più alto — richiede tool ben documentati (Agent-Computer Interface) e spesso checkpoint umani.</td>
+</tr>
+</table>
+
+<div class="callout win">
+<p>Alla fine di questa lezione saprai: dato un meccanismo di Claude Code (Skill, Hook, MCP, Subagent), dire <em>subito</em> se appartiene al lato "workflow" o al lato "agent" dell'asse — e quindi scegliere il primitivo giusto quando progetti un workflow di sviluppo.</p>
+</div>
+
+<h2>Cinque pattern di workflow, in una riga ciascuno</h2>
+<p>Anthropic ne nomina cinque, tutti a "predefined code path" — li approfondiremo uno per uno nelle prossime lezioni. Per ora, solo i nomi e l'idea:</p>
+<ul>
+<li><strong>Prompt chaining</strong>: step sequenziali, ognuno valida l'output del precedente.</li>
+<li><strong>Routing</strong>: classifica l'input e lo instrada verso un handler specializzato.</li>
+<li><strong>Parallelization</strong>: sectioning (sotto-task indipendenti) o voting (più tentativi sullo stesso task).</li>
+<li><strong>Orchestrator-workers</strong>: un LLM centrale scompone il task <em>dinamicamente</em> e delega a worker.</li>
+<li><strong>Evaluator-optimizer</strong>: un LLM genera, un altro valuta e dà feedback, in loop.</li>
+</ul>
+<p class="sidenote"><span class="sidenote-number">3.</span> Nota che "orchestrator-workers" ha una scomposizione dinamica dei sotto-task — è il pattern più vicino al confine con "agent", pur restando un workflow perché il ciclo orchestratore→worker→sintesi è comunque codice fisso.</p>
+
+<h2>Mapping sui building block di Claude Code</h2>
+<table>
+<tr><th>Primitivo</th><th>Cosa fa</th><th>Dove si colloca sull'asse</th></tr>
+<tr>
+  <td><strong>Skill</strong></td>
+  <td>File <code>SKILL.md</code> con istruzioni/conoscenza, caricato on-demand tramite <em>progressive disclosure</em><sup class="sidenote-ref">4</sup> quando la descrizione matcha il task.</td>
+  <td>Trasversale: è conoscenza modulare per l'Augmented LLM, non un controllo di flusso — utilizzabile sia dentro un workflow che dentro un agent.</td>
+</tr>
+<tr>
+  <td><strong>Hook</strong></td>
+  <td>Comando shell/HTTP/MCP eseguito automaticamente a un evento fisso del ciclo di vita (<code>PreToolUse</code>, <code>PostToolUse</code>, <code>SessionStart</code>, ...)<sup class="sidenote-ref">5</sup>, con potere di allow/deny/modify.</td>
+  <td>Puro lato <strong>workflow</strong>: è letteralmente un "predefined code path" che gira indipendentemente da cosa decide il modello.</td>
+</tr>
+<tr>
+  <td><strong>MCP</strong></td>
+  <td>Protocollo standard per collegare l'LLM a sistemi esterni: database, API, browser<sup class="sidenote-ref">6</sup>.</td>
+  <td>È il canale con cui l'Augmented LLM ottiene retrieval/tools/memory — il building block di base, non un pattern di per sé.</td>
+</tr>
+<tr>
+  <td><strong>Subagent</strong></td>
+  <td>Agente delegato con proprio contesto separato, invocato dal main agent tramite il tool <code>Agent</code><sup class="sidenote-ref">7</sup>.</td>
+  <td>La primitiva concreta dietro <strong>orchestrator-workers</strong>: il main agent decide dinamicamente cosa delegare.</td>
+</tr>
+</table>
+<p class="sidenote"><span class="sidenote-number">4.</span> <a href="https://code.claude.com/docs/en/skills" target="_blank" rel="noopener">Extend Claude with skills — Claude Code Docs</a></p>
+<p class="sidenote"><span class="sidenote-number">5.</span> <a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks reference — Claude Code Docs</a></p>
+<p class="sidenote"><span class="sidenote-number">6.</span> <a href="https://modelcontextprotocol.io/docs/getting-started/intro" target="_blank" rel="noopener">What is MCP? — modelcontextprotocol.io</a></p>
+<p class="sidenote"><span class="sidenote-number">7.</span> <a href="https://code.claude.com/docs/en/agent-sdk/overview#subagents" target="_blank" rel="noopener">Agent SDK overview — Subagents</a></p>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="workflow">
+  <p class="quiz-question">1. Un sistema di triage ticket: prima classifica sempre la categoria (bug, domanda, richiesta feature), poi chiama sempre lo stesso prompt specializzato per quella categoria. Che cos'è?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="agent" data-explain="Non qui: il ramo da seguire dopo la classificazione è deciso in anticipo dal codice, non dal modello passo dopo passo.">Agent</button>
+    <button class="quiz-option" data-key="workflow" data-explain="Esatto: la classificazione seguita da un branch fisso è il pattern Routing — un predefined code path.">Workflow</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="agent">
+  <p class="quiz-question">2. Un sistema a cui dai "fai passare la test suite" e che, non sapendo in anticipo quanti file dovrà toccare né in che ordine, decide da solo cosa leggere, modificare e ritestare finché i test sono verdi. Che cos'è?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="workflow" data-explain="Non qui: qui non esiste un numero fisso di step scritto in anticipo — il modello pianifica e reagisce al feedback dell'ambiente ad ogni iterazione.">Workflow</button>
+    <button class="quiz-option" data-key="agent" data-explain="Esatto: numero di step imprevedibile, feedback dall'ambiente (i test) ad ogni iterazione — il modello dirige dinamicamente il processo.">Agent</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="hook">
+  <p class="quiz-question">3. Vuoi garantire che OGNI Edit su un file venga sempre seguito da un linter, indipendentemente da cosa "pensa" il modello. Quale primitivo di Claude Code usi?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="skill" data-explain="Una Skill è conoscenza/istruzioni caricate quando pertinenti — ma il modello potrebbe non invocarla; non garantisce un'esecuzione incondizionata.">Skill</button>
+    <button class="quiz-option" data-key="hook" data-explain="Esatto: un PostToolUse hook su Edit|Write gira sempre, deterministicamente, senza che il modello debba deciderlo.">Hook</button>
+    <button class="quiz-option" data-key="mcp" data-explain="MCP collega a sistemi esterni, ma non garantisce da solo l'esecuzione automatica dopo ogni Edit.">MCP</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="mcp">
+  <p class="quiz-question">4. Devi far interrogare a Claude Code, dal vivo, un database Postgres di produzione durante la sessione. Quale primitivo usi per collegarlo?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="skill" data-explain="Una Skill contiene istruzioni statiche, non un canale live verso un sistema esterno.">Skill</button>
+    <button class="quiz-option" data-key="mcp" data-explain="Esatto: MCP è lo standard aperto per collegare l'LLM a dati e servizi esterni come un database.">MCP</button>
+    <button class="quiz-option" data-key="subagent" data-explain="Un Subagent delega lavoro a un altro LLM, ma non è di per sé un canale verso un database esterno — servirebbe comunque MCP dietro.">Subagent</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="subagent">
+  <p class="quiz-question">5. "Refactora questo modulo ovunque serva nel repo": il numero e la natura delle sotto-modifiche non sono noti in anticipo, e vuoi che ogni sotto-modifica lavori nel proprio contesto isolato. Quale primitivo useresti?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="hook" data-explain="Un Hook esegue un comando fisso a un evento — non scompone dinamicamente un task in sotto-task delegati.">Hook</button>
+    <button class="quiz-option" data-key="subagent" data-explain="Esatto: è l'orchestrator-workers pattern — il main agent scompone il task e delega a Subagent con contesto separato.">Subagent</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p><a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a> (~15 min di lettura). Leggilo per intero prima della prossima lezione: introduce anche i tre principi guida (semplicità, trasparenza, cura dell'Agent-Computer Interface) che useremo per valutare ogni workflow che progetterai.</p>
+</div>
+
+<div class="callout ask">
+<p>Se qualcosa in questa lezione non torna — la definizione di un pattern, il mapping su un primitivo, o vuoi un esempio diverso — chiedimelo direttamente in conversazione. Sono il tuo insegnante per questo percorso, non solo l'autore delle lezioni.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents</a> · <a href="https://code.claude.com/docs/en/skills" target="_blank" rel="noopener">Skills docs</a> · <a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks docs</a> · <a href="https://modelcontextprotocol.io/docs/getting-started/intro" target="_blank" rel="noopener">MCP intro</a> · <a href="https://code.claude.com/docs/en/agent-sdk/overview" target="_blank" rel="noopener">Agent SDK overview</a></p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

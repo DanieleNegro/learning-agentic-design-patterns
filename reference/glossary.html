@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Glossario · Agentic Design Patterns</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Glossario</h1>
+<p class="kicker">Un termine entra qui solo dopo che Daniele ne ha dimostrato la comprensione in un esercizio — non basta che sia stato "coperto" in una lezione.</p>
+
+<p>
+Questo documento cresce lezione dopo lezione, in modo incrementale. Ogni riga cita la lezione in cui il termine
+è stato introdotto <em>e</em> verificato. Se in una lezione futura la comprensione di un termine si approfondisce
+o si corregge, la definizione qui viene aggiornata — non duplicata.
+</p>
+
+<h2>Concetti fondamentali</h2>
+<table>
+<tr><th>Termine</th><th>Definizione</th><th>Confermato in</th></tr>
+<tr>
+  <td><strong>Workflow</strong></td>
+  <td>Sistema in cui LLM e tool sono orchestrati attraverso <em>predefined code paths</em> — il flusso di controllo lo scrive chi progetta il sistema, non il modello.</td>
+  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a></td>
+</tr>
+<tr>
+  <td><strong>Agent</strong></td>
+  <td>Sistema in cui l'LLM dirige dinamicamente il proprio processo e l'uso dei tool, passo dopo passo, in un loop guidato dal feedback dell'ambiente.</td>
+  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a></td>
+</tr>
+</table>
+
+<h2>Pattern di workflow</h2>
+<table>
+<tr><th>Termine</th><th>Definizione</th><th>Confermato in</th></tr>
+<tr>
+  <td><strong>Routing</strong></td>
+  <td>Classifica l'input e lo instrada verso <em>un solo</em> handler specializzato fisso — un unico branch, deciso a runtime dal codice, non dal modello.</td>
+  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a></td>
+</tr>
+<tr>
+  <td><strong>Orchestrator-workers</strong></td>
+  <td>Un LLM centrale scompone dinamicamente il task e delega sotto-task a worker (Subagent) con contesto separato; il ciclo orchestratore→worker→sintesi resta codice fisso.</td>
+  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a></td>
+</tr>
+</table>
+
+<h2>Primitivi di Claude Code</h2>
+<table>
+<tr><th>Termine</th><th>Definizione</th><th>Confermato in</th></tr>
+<tr>
+  <td><strong>Hook</strong></td>
+  <td>Comando eseguito automaticamente a un evento fisso del ciclo di vita (es. <code>PostToolUse</code>) — gira sempre, indipendentemente da cosa "decide" il modello.</td>
+  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a></td>
+</tr>
+<tr>
+  <td><strong>MCP</strong> <span class="sidenote" style="display:inline">(Model Context Protocol)</span></td>
+  <td>Protocollo standard aperto per collegare l'LLM a sistemi esterni — database, API, servizi — in modo uniforme.</td>
+  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a></td>
+</tr>
+<tr>
+  <td><strong>Subagent</strong></td>
+  <td>Agente delegato con proprio contesto separato, invocato dal main agent — la primitiva concreta dietro il pattern orchestrator-workers.</td>
+  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a></td>
+</tr>
+</table>
+
+<div class="callout ask">
+<p>Se una definizione qui ti sembra imprecisa, o vuoi un controesempio in più, chiedimelo — questo glossario è pensato per essere corretto nel tempo, non scritto una volta per sempre.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti: <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents</a> · <a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks docs</a> · <a href="https://modelcontextprotocol.io/docs/getting-started/intro" target="_blank" rel="noopener">MCP intro</a></p>
+</footer>
+
+</main>
+</body>
+</html>

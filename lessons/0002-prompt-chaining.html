@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0002 · Prompt Chaining</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/diagrams.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Prompt Chaining: il workflow più semplice</h1>
+<p class="kicker">Lezione 0002 — il primo dei cinque pattern, e come si scrive letteralmente con <code>pipeline()</code></p>
+
+<p>
+Nella <a href="0001-workflow-vs-agent.html">lezione 0001</a> abbiamo fissato l'asse workflow/agent e nominato cinque
+pattern di workflow in una riga ciascuno. Ora scendiamo nel primo: <strong>prompt chaining</strong>. È il pattern più
+semplice perché è l'idea di base da cui discendono tutti gli altri: scomporre un task in una <strong>sequenza fissa</strong>
+di chiamate LLM, dove l'output di ogni step diventa l'input del successivo<sup class="sidenote-ref">1</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>, sezione "Prompt chaining".</p>
+
+<h2>Definizione e il ruolo del "gate"</h2>
+<p>
+La sequenza da sola non basta a distinguere prompt chaining da un prompt monolitico che fa tutto in un colpo: il punto
+è che ogni step è <strong>più semplice</strong> del task intero, e tra uno step e il successivo puoi inserire un
+<strong>gate</strong> — un controllo programmatico (non un'altra decisione del modello) che verifica l'output
+intermedio prima di lasciarlo passare<sup class="sidenote-ref">2</sup>. Se il gate fallisce, il workflow si ferma o
+ritenta — in codice fisso, scritto da te.
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> Un gate può essere semplice come una validazione di schema, o sofisticato come un'altra chiamata LLM il cui unico compito è dire "questo output rispetta i criteri?" — resta comunque un predefined code path, perché <em>tu</em> decidi quando e come chiamarlo.</p>
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 740 220" role="img" aria-labelledby="chain-diagram-title">
+<title id="chain-diagram-title">Diagramma del pattern Prompt Chaining: In, LLM Call 1, Gate, LLM Call 2, LLM Call 3, Out, con un ramo di uscita se il gate fallisce.</title>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+  </marker>
+  <marker id="arrow-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead--accent"></path>
+  </marker>
+</defs>
+
+<text x="10" y="24" class="row-label">Prompt chaining</text>
+
+<circle cx="40" cy="110" r="20" class="node-io"></circle>
+<text x="40" y="115" text-anchor="middle">In</text>
+
+<line x1="60" y1="110" x2="86" y2="110" class="edge" marker-end="url(#arrow)"></line>
+
+<rect x="90" y="80" width="120" height="60" rx="6" class="node-box"></rect>
+<text x="150" y="105" text-anchor="middle">LLM Call 1</text>
+<text x="150" y="122" text-anchor="middle" class="label-sub">draft</text>
+
+<line x1="210" y1="110" x2="246" y2="110" class="edge" marker-end="url(#arrow)"></line>
+
+<path d="M290,70 L330,110 L290,150 L250,110 Z" class="node-diamond"></path>
+<text x="290" y="114" text-anchor="middle">Gate</text>
+
+<line x1="330" y1="110" x2="366" y2="110" class="edge" marker-end="url(#arrow)"></line>
+<text x="348" y="98" text-anchor="middle" class="label-sub">pass</text>
+
+<rect x="370" y="80" width="120" height="60" rx="6" class="node-box"></rect>
+<text x="430" y="105" text-anchor="middle">LLM Call 2</text>
+<text x="430" y="122" text-anchor="middle" class="label-sub">refine</text>
+
+<line x1="490" y1="110" x2="526" y2="110" class="edge" marker-end="url(#arrow)"></line>
+
+<rect x="530" y="80" width="120" height="60" rx="6" class="node-box"></rect>
+<text x="590" y="105" text-anchor="middle">LLM Call 3</text>
+<text x="590" y="122" text-anchor="middle" class="label-sub">translate</text>
+
+<line x1="650" y1="110" x2="680" y2="110" class="edge" marker-end="url(#arrow)"></line>
+
+<circle cx="700" cy="110" r="20" class="node-io"></circle>
+<text x="700" y="115" text-anchor="middle">Out</text>
+
+<line x1="290" y1="150" x2="290" y2="188" class="edge edge--accent edge--dashed" marker-end="url(#arrow-accent)"></line>
+<text x="290" y="204" text-anchor="middle" class="label-sub">fail → stop</text>
+</svg>
+<p class="diagram-caption">Ogni freccia è codice fisso: nessuno step "decide" se saltare il successivo — lo decide il gate, in modo programmatico.</p>
+</div>
+
+<h2>Quando usarlo</h2>
+<p>
+Prompt chaining scambia latenza per accuratezza: più step significano più round-trip, ma ogni singolo step è più
+facile da far andare bene per il modello, e più facile da testare per te<sup class="sidenote-ref">3</sup>. Ha senso
+quando il task si decompone in modo naturale in sotto-task fissi e sequenziali — es. genera un outline, poi verifica
+che l'outline rispetti dei criteri, poi scrivi il documento completo dall'outline validato.
+</p>
+<p class="sidenote"><span class="sidenote-number">3.</span> Il trade-off esplicito che Anthropic cita: "trading off latency for higher accuracy by making each LLM call an easier task".</p>
+
+<div class="callout win">
+<p>Alla fine di questa lezione saprai: riconoscere uno scenario di prompt chaining e distinguerlo da routing e da un agent loop, spiegare a cosa serve un gate, e scrivere una catena con <code>pipeline()</code> nel Workflow tool.</p>
+</div>
+
+<h2>Mapping sul Workflow tool di Claude Code</h2>
+<p>
+Il Workflow tool che hai a disposizione in questa sessione implementa prompt chaining <em>letteralmente</em> con
+<code>pipeline()</code>: ogni item passa attraverso una sequenza fissa di stage, e lo stage <em>n</em> riceve
+l'output dello stage <em>n-1</em>. Il gate è semplicemente codice JavaScript ordinario tra due <code>agent()</code>,
+oppure la validazione automatica che scatta quando passi <code>schema</code> a <code>agent()</code>.
+</p>
+<pre><code>pipeline(
+  items,
+  item => agent(`Genera una bozza per ${item}`, { schema: DRAFT_SCHEMA }),
+  draft => draft.completa               // <- il gate: un controllo, non un'altra decisione del modello
+    ? agent(`Rifinisci: ${draft.testo}`, { schema: DRAFT_SCHEMA })
+    : null,                             // fail → stop per questo item
+  refined => agent(`Traduci in inglese: ${refined.testo}`)
+)</code></pre>
+<p>
+Nota il contrasto con <code>parallel()</code>, che implementa invece il pattern successivo della lista —
+<strong>parallelization</strong> — eseguendo più thunk <em>senza</em> dipendenza sequenziale tra loro. La differenza
+tra i due primitivi nel Workflow tool <em>è</em> la differenza tra prompt chaining e parallelization.
+</p>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="chaining">
+  <p class="quiz-question">1. Generi una bozza di changelog dai commit, poi passi la bozza a un secondo step che la riformatta secondo lo stile del progetto, poi un terzo step la traduce in inglese. Che cos'è?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="routing" data-explain="Non qui: routing classifica e instrada verso UN handler, non incatena tre step sequenziali che si passano l'output l'uno all'altro.">Routing</button>
+    <button class="quiz-option" data-key="chaining" data-explain="Esatto: tre step fissi in sequenza, ognuno riceve l'output del precedente — è prompt chaining.">Prompt chaining</button>
+    <button class="quiz-option" data-key="agent" data-explain="Non qui: il numero e l'ordine degli step sono fissati in anticipo dal codice, il modello non li decide passo dopo passo.">Agent</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="gate">
+  <p class="quiz-question">2. Tra il primo e il secondo step della catena inserisci un controllo che verifica che la bozza abbia tutti i campi richiesti prima di lasciarla proseguire. Come si chiama questo controllo nel pattern?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="hook" data-explain="Un Hook è il meccanismo di Claude Code per eventi del ciclo di vita (PostToolUse, ecc.) — qui invece stiamo descrivendo un concetto di pattern-design, non un primitivo specifico dell'harness.">Hook</button>
+    <button class="quiz-option" data-key="gate" data-explain="Esatto: nel vocabolario di Anthropic per prompt chaining, questo controllo programmatico tra due step si chiama gate.">Gate</button>
+    <button class="quiz-option" data-key="subagent" data-explain="Un Subagent è un agente delegato con contesto proprio — non un controllo di validazione tra due step di una catena.">Subagent</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="pipeline">
+  <p class="quiz-question">3. Nel Workflow tool, quale primitivo implementa direttamente prompt chaining per un singolo item — cioè fa passare l'output di uno stage come input del successivo?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="parallel" data-explain="parallel() è una barriera che esegue thunk indipendenti e aspetta tutti — è il primitivo per parallelization, non per prompt chaining.">parallel()</button>
+    <button class="quiz-option" data-key="pipeline" data-explain="Esatto: pipeline() fa attraversare a ogni item una sequenza fissa di stage, ognuno riceve l'output dello stage precedente.">pipeline()</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="accuratezza">
+  <p class="quiz-question">4. Scomponi "traduci e verifica che non abbia perso termini tecnici" in due step sequenziali invece di un unico prompt che fa entrambe le cose. Cosa guadagni, al costo di più latenza?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="velocita" data-explain="È il contrario: più step significano più round-trip, quindi più latenza, non meno.">Velocità</button>
+    <button class="quiz-option" data-key="accuratezza" data-explain="Esatto: ogni step diventa un task più semplice per il modello, e questo migliora l'accuratezza — è esattamente il trade-off che Anthropic descrive per prompt chaining.">Accuratezza</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="routing">
+  <p class="quiz-question">5. Un sistema che classifica sempre prima il tipo di richiesta e la instrada verso UN SOLO handler specializzato (non una sequenza di più step successivi) è un esempio di quale pattern?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="chaining" data-explain="Non qui: prompt chaining incatena PIÙ step in sequenza, ognuno passa l'output al successivo — qui invece c'è un solo salto verso un solo handler.">Prompt chaining</button>
+    <button class="quiz-option" data-key="routing" data-explain="Esatto: classificazione seguita da UN branch fisso verso UN handler è routing, non chaining — la distinzione che avevi già visto nella lezione 0001.">Routing</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p><a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>, sezione "Prompt chaining". Rileggi in particolare il diagramma con "Gate" e il ramo "Exit" — è quello riprodotto sopra.</p>
+</div>
+
+<div class="callout ask">
+<p>Se il confine tra gate e agent-decision, o tra pipeline() e parallel(), non ti è chiaro — chiedimelo. Vale anche per esempi diversi da quello del changelog, se ne vuoi uno più vicino al tuo lavoro quotidiano.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents</a>. Termini consolidati: <a href="../reference/glossary.html">Glossario</a>. Lezione precedente: <a href="0001-workflow-vs-agent.html">0001 — Workflow vs Agent</a>.</p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

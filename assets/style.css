@@ -1,0 +1,242 @@
+/* Shared stylesheet for the Agentic Design Patterns teaching workspace.
+   Tufte-ish: generous margins, serif reading column, sidenotes in the margin. */
+
+:root {
+  --bg: #fdfbf7;
+  --fg: #1a1a1a;
+  --fg-muted: #5a5a5a;
+  --rule: #d8d2c4;
+  --accent: #a3401f;
+  --code-bg: #f1ede2;
+  --correct: #2e6b2e;
+  --incorrect: #a3401f;
+  --callout-bg: #f4efe2;
+  --max: 1200px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16161a;
+    --fg: #e8e6df;
+    --fg-muted: #a7a49a;
+    --rule: #3a3a38;
+    --accent: #e08a5b;
+    --code-bg: #232320;
+    --correct: #7fbf7f;
+    --incorrect: #e08a5b;
+    --callout-bg: #201f1a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 18px; }
+
+body {
+  margin: 0 auto;
+  max-width: var(--max);
+  padding: 3rem 2rem 6rem;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  line-height: 1.6;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 40em) minmax(0, 16em);
+  column-gap: 3rem;
+}
+
+main.grid > * { grid-column: 1; }
+
+h1, h2, h3 {
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--fg);
+}
+
+h1 {
+  font-size: 2rem;
+  margin-bottom: 0.25em;
+}
+
+.kicker {
+  font-family: "Iowan Old Style", Georgia, serif;
+  font-style: italic;
+  color: var(--fg-muted);
+  font-size: 1rem;
+  margin-top: 0;
+}
+
+h2 {
+  font-size: 1.35rem;
+  margin-top: 2.5em;
+  border-top: 1px solid var(--rule);
+  padding-top: 1em;
+}
+
+h3 {
+  font-size: 1.1rem;
+  margin-top: 1.75em;
+}
+
+p, li { font-size: 1.05rem; }
+
+a { color: var(--accent); }
+a:visited { color: var(--accent); }
+
+code, pre, kbd {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.9em;
+  background: var(--code-bg);
+  border-radius: 3px;
+}
+
+code { padding: 0.1em 0.35em; }
+
+pre {
+  padding: 1em;
+  overflow-x: auto;
+  line-height: 1.45;
+}
+pre code { background: none; padding: 0; }
+
+blockquote {
+  margin: 1.5em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--rule);
+  color: var(--fg-muted);
+}
+
+/* Sidenotes: float into the right margin on wide viewports, inline on narrow */
+.sidenote {
+  grid-column: 2;
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  line-height: 1.5;
+  margin-top: 0.2em;
+}
+.sidenote .sidenote-number {
+  color: var(--accent);
+  font-weight: 600;
+}
+sup.sidenote-ref {
+  color: var(--accent);
+  font-weight: 600;
+  cursor: default;
+}
+
+@media (max-width: 860px) {
+  .grid { grid-template-columns: 1fr; }
+  .sidenote {
+    grid-column: 1;
+    border-left: 3px solid var(--rule);
+    padding-left: 0.75em;
+    margin: 0.5em 0 1.5em;
+  }
+}
+
+/* Callouts */
+.callout {
+  background: var(--callout-bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1.1em 1.3em;
+  margin: 1.75em 0;
+}
+.callout h3 { margin-top: 0; }
+.callout.win::before {
+  content: "Vittoria di questa lezione";
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 0.5em;
+}
+.callout.source::before {
+  content: "Fonte primaria consigliata";
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 0.5em;
+}
+.callout.ask::before {
+  content: "Chiedi al tuo insegnante";
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 0.5em;
+}
+
+/* Comparison table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.95rem;
+}
+th, td {
+  text-align: left;
+  padding: 0.5em 0.75em;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+th { color: var(--fg-muted); font-weight: 600; }
+
+/* Quiz widget */
+.quiz {
+  background: var(--callout-bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1.2em 1.3em;
+  margin: 1.5em 0;
+}
+.quiz-question { font-weight: 600; margin-top: 0; }
+.quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  margin: 0.75em 0;
+}
+.quiz-option {
+  font-family: inherit;
+  font-size: 0.98rem;
+  text-align: left;
+  padding: 0.55em 0.8em;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+.quiz-option:hover:not(:disabled) { border-color: var(--accent); }
+.quiz-option:disabled { cursor: default; opacity: 0.75; }
+.quiz-option.correct { border-color: var(--correct); color: var(--correct); font-weight: 600; }
+.quiz-option.incorrect { border-color: var(--incorrect); color: var(--incorrect); }
+.quiz-feedback {
+  font-size: 0.92rem;
+  padding-top: 0.5em;
+  border-top: 1px dashed var(--rule);
+  margin-top: 0.5em;
+}
+.quiz-feedback.correct-msg { color: var(--correct); }
+.quiz-feedback.wrong-msg { color: var(--incorrect); }
+
+footer.lesson-footer {
+  margin-top: 4em;
+  padding-top: 1.5em;
+  border-top: 1px solid var(--rule);
+  font-size: 0.9rem;
+  color: var(--fg-muted);
+}
+
+@media print {
+  body { background: white; color: black; }
+  .quiz, .callout { break-inside: avoid; }
+}
