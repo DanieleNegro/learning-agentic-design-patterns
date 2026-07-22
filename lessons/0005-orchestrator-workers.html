@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0005 · Orchestrator-workers</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/diagrams.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Orchestrator-workers: i sotto-task li decide il modello, non tu</h1>
+<p class="kicker">Lezione 0005 — il quarto pattern, il primo dove la struttura stessa non è fissata in anticipo</p>
+
+<p>
+Nella <a href="0004-parallelization.html">lezione 0004</a> l'ultima domanda del quiz ha già messo il dito sul punto:
+in parallelization tu decidi, <em>nel codice</em>, quali sotto-task lanciare — tre chiamate fisse per sicurezza,
+performance, stile. In <strong>orchestrator-workers</strong> quella lista non esiste ancora quando scrivi il codice:
+un LLM centrale (l'<strong>orchestrator</strong>) legge il task specifico e decide <em>lui</em>, a runtime, in quanti
+sotto-task scomporlo e cosa delegare a ciascuno<sup class="sidenote-ref">1</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>, sezione "Orchestrator-workers": "the orchestrator LLM dynamically breaks down tasks, delegates them to worker LLMs, and synthesizes their results" — e la differenza esplicita da parallelization: "subtasks aren't pre-defined, but determined by the orchestrator based on the specific input".</p>
+
+<h2>Cosa resta fisso, e cosa no</h2>
+<p>
+Attenzione a non scivolare verso "allora è un agent, non un workflow": il <em>ciclo</em>
+orchestratore→delega→sintesi resta un predefined code path, esattamente come negli altri quattro pattern — lo scrivi
+tu, gira sempre uguale. Quello che cambia è solo il <em>contenuto</em> di quel ciclo: il numero di worker e il loro
+compito sono l'<strong>output</strong> di una chiamata LLM (l'orchestrator), non una costante che hai scritto tu.
+È la stessa distinzione workflow/agent della <a href="0001-workflow-vs-agent.html">lezione 0001</a>, applicata
+dentro un singolo step invece che all'intero sistema.
+</p>
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 700 300" role="img" aria-labelledby="orch-diagram-title">
+<title id="orch-diagram-title">Diagramma del pattern Orchestrator-workers: In, Orchestrator che pianifica un numero variabile di worker (Worker 1, Worker 2, Worker N), poi Synthesize prima di Out.</title>
+<defs>
+  <marker id="o-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+  </marker>
+</defs>
+
+<text x="10" y="20" class="row-label">Orchestrator-workers</text>
+
+<circle cx="40" cy="150" r="18" class="node-io"></circle>
+<text x="40" y="155" text-anchor="middle">In</text>
+
+<line x1="58" y1="150" x2="88" y2="150" class="edge" marker-end="url(#o-arrow)"></line>
+
+<rect x="92" y="120" width="140" height="60" rx="6" class="node-box"></rect>
+<text x="162" y="146" text-anchor="middle">Orchestrator</text>
+<text x="162" y="163" text-anchor="middle" class="label-sub">pianifica i sotto-task</text>
+
+<line x1="232" y1="150" x2="288" y2="55" class="edge" marker-end="url(#o-arrow)"></line>
+<line x1="232" y1="150" x2="288" y2="150" class="edge" marker-end="url(#o-arrow)"></line>
+<line x1="232" y1="150" x2="288" y2="245" class="edge edge--dashed" marker-end="url(#o-arrow)"></line>
+
+<rect x="292" y="30" width="130" height="50" rx="6" class="node-box"></rect>
+<text x="357" y="52" text-anchor="middle">Worker 1</text>
+<text x="357" y="69" text-anchor="middle" class="label-sub">sotto-task A</text>
+
+<rect x="292" y="125" width="130" height="50" rx="6" class="node-box"></rect>
+<text x="357" y="147" text-anchor="middle">Worker 2</text>
+<text x="357" y="164" text-anchor="middle" class="label-sub">sotto-task B</text>
+
+<text x="357" y="205" text-anchor="middle" class="label-sub">⋮</text>
+
+<rect x="292" y="220" width="130" height="50" rx="6" class="node-box node-box--accent"></rect>
+<text x="357" y="242" text-anchor="middle">Worker N</text>
+<text x="357" y="259" text-anchor="middle" class="label-sub">deciso a runtime</text>
+
+<line x1="422" y1="55" x2="466" y2="150" class="edge" marker-end="url(#o-arrow)"></line>
+<line x1="422" y1="150" x2="466" y2="150" class="edge" marker-end="url(#o-arrow)"></line>
+<line x1="422" y1="245" x2="466" y2="150" class="edge edge--dashed" marker-end="url(#o-arrow)"></line>
+
+<rect x="470" y="125" width="140" height="50" rx="6" class="node-box node-box--accent"></rect>
+<text x="540" y="147" text-anchor="middle">Synthesize</text>
+<text x="540" y="164" text-anchor="middle" class="label-sub">codice fisso</text>
+
+<line x1="610" y1="150" x2="642" y2="150" class="edge" marker-end="url(#o-arrow)"></line>
+
+<circle cx="662" cy="150" r="18" class="node-io"></circle>
+<text x="662" y="155" text-anchor="middle">Out</text>
+</svg>
+<p class="diagram-caption">Quanti worker (2? 5?) e cosa fa ciascuno non è scritto nel codice: lo decide l'orchestrator leggendo il task specifico. Solo il ciclo pianifica→delega→sintetizza è fisso — è questo, non il numero di worker, a renderlo ancora un workflow.</p>
+</div>
+
+<h2>Quando usarlo</h2>
+<p>
+Orchestrator-workers conviene quando non puoi prevedere in anticipo la scomposizione del task — es. "rifattorizza
+questa funzione ovunque venga usata nel codebase": non sai quanti file la usano finché non guardi<sup class="sidenote-ref">2</sup>.
+Se invece i sotto-task sono sempre gli stessi (sempre "sicurezza, performance, stile"), non ti serve un orchestrator:
+torna a <a href="0004-parallelization.html">parallelization</a>, che è più semplice da debuggare perché la struttura
+è visibile leggendo il codice, non nascosta nell'output di una chiamata LLM.
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> Esempio di Anthropic: coding task dove "the exact set of files that need to change" dipende dalla natura specifica di ogni richiesta.</p>
+
+<div class="callout win">
+<p>Alla fine di questa lezione saprai: distinguere orchestrator-workers da parallelization sulla base di UNA domanda ("il numero di sotto-task è fisso nel codice o deciso a runtime?"), riconoscere Subagent come primitiva concreta dietro ogni worker, e scrivere un orchestrator con agent() + parallel() nel Workflow tool.</p>
+</div>
+
+<h2>Mapping su Claude Code e sul Workflow tool</h2>
+<p>
+Questo pattern non è astratto per te: <strong>lo stai osservando dal vivo in questa sessione</strong>. Quando in
+questa conversazione delego una ricerca ampia a un subagent tramite l'Agent tool, io (l'orchestrator) decido a
+runtime se e quanti subagent lanciare, e con che istruzioni — non è pre-scritto quale subagent userò finché non leggo
+la tua richiesta. Il <strong>Subagent</strong> (già nel <a href="../reference/glossary.html">glossario</a> dalla
+lezione 0001) è la primitiva concreta dietro ogni worker.
+</p>
+<p>
+Nel Workflow tool, lo stesso pattern si scrive componendo i due primitivi che già conosci: un <code>agent()</code>
+iniziale che produce un <em>piano</em> (numero e contenuto dei sotto-task), seguito da un <code>parallel()</code>
+che esegue esattamente quel piano — non uno fissato da te in anticipo.
+</p>
+<pre><code>const plan = await agent(
+  `Scomponi questo refactoring in sotto-task indipendenti, uno per file da modificare: ${task}`,
+  { schema: PLAN_SCHEMA }   // { subtasks: [{ file, istruzioni }, ...] } — la lunghezza non è nota in anticipo
+)
+
+const results = await parallel(
+  plan.subtasks.map(st => () => agent(st.istruzioni, { schema: RESULT_SCHEMA }))
+)
+
+const synthesis = await agent(
+  `Sintetizza questi risultati in un unico riepilogo: ${JSON.stringify(results)}`
+)</code></pre>
+<p>
+Confronta con il codice della lezione 0004: lì <code>parallel()</code> riceveva un array di thunk scritto a mano,
+di lunghezza 3, fissa. Qui riceve <code>plan.subtasks.map(...)</code> — un array la cui lunghezza è decisa
+dall'orchestrator, chiamata dopo chiamata. <code>parallel()</code> è lo stesso primitivo; cambia solo da dove viene
+l'input.
+</p>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="orchestrator">
+  <p class="quiz-question">1. Un LLM centrale legge una richiesta di refactoring, capisce che tocca 4 file (non lo sapevi in anticipo, dipende dal codice specifico) e delega un worker per ciascuno. Che pattern è?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="parallelization" data-explain="Non qui: in parallelization il numero e il contenuto dei sotto-task sono fissi, scritti da te nel codice — qui invece il modello li scopre e decide a runtime.">Parallelization</button>
+    <button class="quiz-option" data-key="orchestrator" data-explain="Esatto: un LLM centrale che scompone dinamicamente il task in base all'input specifico, delegando ai worker, è orchestrator-workers.">Orchestrator-workers</button>
+    <button class="quiz-option" data-key="routing" data-explain="Non qui: routing sceglie UN SOLO handler tra alternative fisse — qui invece vengono creati ed eseguiti più worker, in numero variabile.">Routing</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="orchestrator2">
+  <p class="quiz-question">2. Come si chiama, nel pattern, l'LLM centrale che decide la scomposizione del task e poi sintetizza i risultati dei worker?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="orchestrator2" data-explain="Esatto: l'orchestrator è l'LLM centrale che scompone il task, delega e infine sintetizza.">Orchestrator</button>
+    <button class="quiz-option" data-key="classifier" data-explain="Il classifier (visto nel routing) assegna l'input a UNA categoria fissa tra poche alternative — qui invece l'LLM centrale genera un piano di sotto-task, non sceglie tra opzioni predefinite.">Classifier</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="subagent">
+  <p class="quiz-question">3. Nel vocabolario di Claude Code, come si chiama la primitiva concreta dietro ogni worker delegato dall'orchestrator?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="hook" data-explain="Un Hook è un comando che scatta sempre a un evento fisso dell'harness — non un worker con contesto proprio delegato da un LLM centrale.">Hook</button>
+    <button class="quiz-option" data-key="subagent" data-explain="Esatto: il Subagent, con contesto separato, invocato dal main agent, è la primitiva concreta dietro ogni worker di orchestrator-workers.">Subagent</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="runtime">
+  <p class="quiz-question">4. Qual è la differenza strutturale precisa tra parallelization e orchestrator-workers?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="runtime" data-explain="Esatto: è l'unica differenza strutturale — in parallelization il numero e il contenuto dei sotto-task sono scritti nel codice in anticipo, in orchestrator-workers li decide l'orchestrator a runtime.">Il numero di sotto-task è deciso a runtime, non fissato nel codice</button>
+    <button class="quiz-option" data-key="velocita" data-explain="Nessuno dei due pattern è definito dalla velocità — orchestrator-workers aggiunge anzi una chiamata LLM in più (la pianificazione) rispetto a parallelization.">Orchestrator-workers è sempre più veloce</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="evaluator">
+  <p class="quiz-question">5. Un ultimo pattern (che non hai ancora visto): generi un risultato, un secondo LLM lo valuta rispetto a un criterio e restituisce feedback, e se non soddisfa il criterio il risultato viene rigenerato — finché non passa. Come si chiama?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="orchestrator" data-explain="Non qui: orchestrator-workers scompone in sotto-task paralleli, non ripete un ciclo genera→valuta→rigenera sullo stesso output.">Orchestrator-workers</button>
+    <button class="quiz-option" data-key="evaluator" data-explain="Esatto (anticipazione): un ciclo genera→valuta→rigenera guidato da un giudice esplicito è evaluator-optimizer — l'ultimo pattern della lista di Anthropic.">Evaluator-optimizer</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p><a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>, sezione "Orchestrator-workers". Nota come Anthropic distingua esplicitamente questo pattern da parallelization proprio sulla base della "specific input"-dipendenza dei sotto-task.</p>
+</div>
+
+<div class="callout ask">
+<p>Se il confine tra "ciclo fisso" e "contenuto deciso a runtime" non ti torna, o vuoi vedere un esempio di orchestrator-workers preso da questa stessa sessione (es. come l'Agent tool decide quando delegare a un subagent) — chiedimelo.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents</a>. Termini consolidati: <a href="../reference/glossary.html">Glossario</a>. Lezione precedente: <a href="0004-parallelization.html">0004 — Parallelization</a>.</p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

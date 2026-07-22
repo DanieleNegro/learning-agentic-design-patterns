@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0006 · Evaluator-optimizer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/diagrams.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Evaluator-optimizer: il primo pattern con un ciclo</h1>
+<p class="kicker">Lezione 0006 — il quinto e ultimo pattern nominato da Anthropic, e chiude l'arco iniziato nella lezione 0001</p>
+
+<p>
+Tutti e quattro i pattern visti finora — <a href="0002-prompt-chaining.html">chaining</a>,
+<a href="0003-routing.html">routing</a>, <a href="0004-parallelization.html">parallelization</a>,
+<a href="0005-orchestrator-workers.html">orchestrator-workers</a> — sono grafi <strong>aciclici</strong>: l'esecuzione
+va sempre avanti, mai indietro. <strong>Evaluator-optimizer</strong> è il primo che introduce un <strong>ciclo</strong>
+esplicito: un LLM genera una risposta, un secondo LLM la valuta rispetto a criteri e restituisce feedback, e se la
+risposta non soddisfa i criteri viene rigenerata con quel feedback — da capo, finché l'evaluator non approva<sup class="sidenote-ref">1</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>, sezione "Evaluator-optimizer": "one LLM call generates a response while another provides evaluation and feedback in a loop".</p>
+
+<h2>Il confronto che conta: gate vs evaluator</h2>
+<p>
+Nella <a href="0002-prompt-chaining.html">lezione 0002</a> il gate, se falliva, <strong>fermava</strong> il workflow —
+un'unica direzione, avanti o stop. Qui, se l'evaluator boccia la risposta, il flusso non si ferma: torna
+<strong>indietro</strong> allo step di generazione, portando con sé un feedback specifico su cosa correggere. È
+questo loop — non la semplice presenza di due chiamate LLM in sequenza — a distinguere evaluator-optimizer da
+prompt chaining con un gate.
+</p>
+<p>
+Anthropic identifica due segnali che indicano che vale la pena usare questo pattern<sup class="sidenote-ref">2</sup>:
+primo, un umano che esprime un feedback esplicito migliora dimostrabilmente la risposta; secondo, l'LLM stesso è in
+grado di produrre un feedback di quella qualità. Se manca il secondo segnale — l'LLM non sa giudicare bene le proprie
+uscite secondo quei criteri — il ciclo rigenera senza convergere, e il pattern non paga il costo aggiuntivo.
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> Testuale: "the LLM response can be demonstrably improved when a human articulates their feedback" e "the LLM can provide such feedback" — per analogia, il processo di scrittura iterativo di uno scrittore umano.</p>
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 700 320" role="img" aria-labelledby="eo-diagram-title">
+<title id="eo-diagram-title">Diagramma del pattern Evaluator-optimizer: In, Generate, Evaluate, che se approva prosegue verso Out, altrimenti manda un feedback indietro a Generate.</title>
+<defs>
+  <marker id="e-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+  </marker>
+  <marker id="e-arrow-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead--accent"></path>
+  </marker>
+</defs>
+
+<text x="10" y="20" class="row-label">Evaluator-optimizer</text>
+
+<circle cx="40" cy="140" r="18" class="node-io"></circle>
+<text x="40" y="145" text-anchor="middle">In</text>
+
+<line x1="58" y1="140" x2="86" y2="140" class="edge" marker-end="url(#e-arrow)"></line>
+
+<rect x="90" y="110" width="140" height="60" rx="6" class="node-box"></rect>
+<text x="160" y="136" text-anchor="middle">Generate</text>
+<text x="160" y="153" text-anchor="middle" class="label-sub">bozza</text>
+
+<line x1="230" y1="140" x2="266" y2="140" class="edge" marker-end="url(#e-arrow)"></line>
+
+<path d="M300,100 L340,140 L300,180 L260,140 Z" class="node-diamond"></path>
+<text x="300" y="144" text-anchor="middle">Evaluate</text>
+
+<line x1="340" y1="140" x2="596" y2="140" class="edge" marker-end="url(#e-arrow)"></line>
+<text x="470" y="128" text-anchor="middle" class="label-sub">approva</text>
+
+<circle cx="620" cy="140" r="18" class="node-io"></circle>
+<text x="620" y="145" text-anchor="middle">Out</text>
+
+<path d="M300,180 L300,250 L160,250 L160,170" class="edge edge--accent edge--dashed" fill="none" marker-end="url(#e-arrow-accent)"></path>
+<text x="230" y="270" text-anchor="middle" class="label-sub">feedback → rigenera</text>
+</svg>
+<p class="diagram-caption">A differenza del gate (lezione 0002), un rifiuto qui non ferma il workflow: torna a Generate con un feedback specifico, e il ciclo si ripete finché Evaluate non approva.</p>
+</div>
+
+<div class="callout win">
+<p>Alla fine di questa lezione saprai: distinguere evaluator-optimizer da prompt chaining sulla base della direzione del flusso (avanti-e-stop vs ciclo-con-feedback), riconoscere i due segnali che indicano se vale la pena usarlo, e scriverlo come un while loop nel Workflow tool — chiudendo la copertura di tutti e cinque i pattern di "Building effective agents".</p>
+</div>
+
+<h2>Mapping sul Workflow tool di Claude Code</h2>
+<p>
+Non serve un primitivo nuovo: evaluator-optimizer è un <code>while</code> ordinario attorno a due
+<code>agent()</code> — uno che genera, uno che valuta — esattamente lo schema "loop-until" che il Workflow tool usa
+per accumulare risultati fino a un target. Qui il "target" è "l'evaluator approva", non un conteggio.
+</p>
+<pre><code>let draft = await agent(
+  `Scrivi una bozza di changelog da questi commit: ${commits}`,
+  { schema: DRAFT_SCHEMA }
+)
+
+let evaluation = await agent(
+  `Valuta questa bozza secondo lo stile del progetto, elenca cosa manca: ${draft.testo}`,
+  { schema: EVAL_SCHEMA }   // { approvato: bool, feedback: string }
+)
+
+while (!evaluation.approvato) {
+  draft = await agent(
+    `Rigenera la bozza applicando questo feedback: ${evaluation.feedback}\n\nBozza precedente: ${draft.testo}`,
+    { schema: DRAFT_SCHEMA }
+  )
+  evaluation = await agent(`Valuta di nuovo: ${draft.testo}`, { schema: EVAL_SCHEMA })
+}</code></pre>
+<p>
+Confronta con il gate della lezione 0002: lì un <code>if</code> semplice decideva se <em>proseguire</em>. Qui il
+controllo è un <code>while</code>, perché il flusso può tornare allo stesso step generate un numero di volte non
+noto in anticipo — proprio come non sapevi in anticipo il numero di worker nell'orchestrator-workers, qui non sai
+in anticipo quanti cicli servono per convergere.
+</p>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="evaluator">
+  <p class="quiz-question">1. Generi una bozza di documento, un secondo LLM la valuta secondo criteri specifici e restituisce feedback; se non soddisfa i criteri, la bozza viene rigenerata con quel feedback, e il ciclo si ripete finché non passa. Che pattern è?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="chaining" data-explain="Non qui: prompt chaining avanza sempre in avanti (o si ferma al gate) — non torna mai indietro a rigenerare uno step precedente con nuovo feedback.">Prompt chaining</button>
+    <button class="quiz-option" data-key="evaluator" data-explain="Esatto: generazione e valutazione in un ciclo che si ripete finché l'evaluator non approva è evaluator-optimizer.">Evaluator-optimizer</button>
+    <button class="quiz-option" data-key="orchestrator" data-explain="Non qui: orchestrator-workers scompone in sotto-task delegati a worker distinti — non ripete un ciclo genera→valuta sullo stesso output.">Orchestrator-workers</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="loop">
+  <p class="quiz-question">2. Qual è la differenza chiave tra il gate di prompt chaining e l'evaluator di questo pattern, quando il controllo fallisce?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="loop" data-explain="Esatto: il gate ferma il workflow in un'unica direzione; l'evaluator invece manda un feedback indietro allo step di generazione, e il ciclo si ripete.">Il gate ferma il flusso, l'evaluator lo rimanda indietro con un feedback</button>
+    <button class="quiz-option" data-key="uguale" data-explain="Non sono lo stesso concetto: il gate è un controllo a senso unico (proseguire o fermarsi), l'evaluator introduce esplicitamente un ciclo con feedback — è la differenza strutturale di questa lezione.">Nessuna, sono lo stesso concetto</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="segnali">
+  <p class="quiz-question">3. Quali segnali indicano, secondo Anthropic, che vale la pena usare evaluator-optimizer?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="segnali" data-explain="Esatto: sono i due segnali citati da Anthropic — se manca il secondo, il ciclo rigenera senza convergere.">Il feedback umano migliora la risposta, e l'LLM sa darlo</button>
+    <button class="quiz-option" data-key="velocita" data-explain="Il pattern aggiunge latenza e costo (una chiamata di valutazione per ogni ciclo) — la velocità non è mai il criterio per sceglierlo.">Il task deve essere veloce da eseguire una sola volta</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="while">
+  <p class="quiz-question">4. Nel Workflow tool, come si esprime evaluator-optimizer usando i costrutti già visti?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="while" data-explain="Esatto: un while attorno a due agent() (genera, valuta) che si ripete finché l'evaluator non approva — lo stesso schema loop-until visto per l'accumulo di risultati.">Un while attorno a due agent(), finché l'evaluator approva</button>
+    <button class="quiz-option" data-key="pipeline" data-explain="pipeline() fa avanzare ogni item attraverso stage fissi, una sola volta ciascuno — non può tornare indietro a rigenerare uno stage precedente con un ciclo.">pipeline() con tre stage fissi in sequenza</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="chaining2">
+  <p class="quiz-question">5. Ripasso: traduci un documento, poi verifichi (senza tornare indietro) che non abbia perso termini tecnici, poi lo formatti secondo lo stile aziendale — tre step fissi, sempre in avanti. È evaluator-optimizer?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="chaining2" data-explain="Esatto: nessun ciclo, nessun ritorno a uno step precedente con feedback — è prompt chaining, anche se ci sono due chiamate LLM in sequenza dopo la prima.">No, è prompt chaining: nessun ciclo indietro</button>
+    <button class="quiz-option" data-key="evaluator2" data-explain="Non qui: manca l'elemento decisivo di evaluator-optimizer, cioè il ciclo — qui gli step vanno sempre avanti, mai indietro a rigenerare.">Sì, perché ci sono due chiamate LLM in sequenza</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p><a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>, sezione "Evaluator-optimizer". Con questa lezione hai coperto tutti e cinque i pattern di workflow nominati nell'articolo: chaining, routing, parallelization, orchestrator-workers, evaluator-optimizer.</p>
+</div>
+
+<div class="callout ask">
+<p>Se il confine tra gate e loop di feedback non ti torna, o vuoi vedere questo pattern applicato a un caso reale del tuo lavoro (es. generare e affinare del codice finché i test non passano) — chiedimelo. È anche un buon momento per chiedermi cosa manca ancora rispetto alla tua mission: i cinque pattern sono la teoria dei workflow, ma Hook, Skill custom e MCP restano da toccare.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents</a>. Termini consolidati: <a href="../reference/glossary.html">Glossario</a>. Lezione precedente: <a href="0005-orchestrator-workers.html">0005 — Orchestrator-workers</a>.</p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0003 · Routing</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/diagrams.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Routing: un solo branch, scelto a runtime</h1>
+<p class="kicker">Lezione 0003 — il secondo pattern, e perché nel Workflow tool non serve un primitivo dedicato</p>
+
+<p>
+Nella <a href="0002-prompt-chaining.html">lezione 0002</a> hai visto prompt chaining: più step, tutti eseguiti in sequenza,
+sullo stesso input che si trasforma passo dopo passo. <strong>Routing</strong> è diverso: classifica l'input e lo instrada
+verso <strong>un solo</strong> handler specializzato, scelto tra più possibili — gli altri handler semplicemente non
+vengono eseguiti<sup class="sidenote-ref">1</sup>. Lo avevi già incontrato di sfuggita nel quiz 0001 e nell'ultima domanda
+del quiz 0002: qui lo tratti come pattern a sé.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>, sezione "Routing".</p>
+
+<h2>Definizione e il perché della separazione</h2>
+<p>
+Il punto di routing non è solo "smistare traffico": è <strong>separation of concerns</strong>. Invece di scrivere un
+unico prompt che deve gestire bene ogni possibile categoria di input — bug report, feature request, domanda generica —
+scrivi un handler per categoria, ognuno ottimizzato solo per il proprio caso<sup class="sidenote-ref">2</sup>. Il
+classifier che decide quale handler chiamare può essere un'altra chiamata LLM, oppure un classificatore tradizionale
+— l'importante è che la scelta del branch resti codice fisso, non una decisione presa step-by-step dal modello dentro
+un loop.
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> Anthropic lo descrive come: "routing works well for complex tasks where there are distinct categories that are better handled separately, and where classification can be handled accurately, either by an LLM or a more traditional classification model/algorithm."</p>
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 800 280" role="img" aria-labelledby="routing-diagram-title">
+<title id="routing-diagram-title">Diagramma del pattern Routing: In, Classify, un nodo Route che smista verso Handler A, B o C, con un solo branch attivo verso Out.</title>
+<defs>
+  <marker id="r-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+  </marker>
+  <marker id="r-arrow-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead--accent"></path>
+  </marker>
+</defs>
+
+<text x="10" y="24" class="row-label">Routing</text>
+
+<circle cx="40" cy="130" r="20" class="node-io"></circle>
+<text x="40" y="135" text-anchor="middle">In</text>
+
+<line x1="60" y1="130" x2="96" y2="130" class="edge" marker-end="url(#r-arrow)"></line>
+
+<rect x="100" y="100" width="130" height="60" rx="6" class="node-box"></rect>
+<text x="165" y="126" text-anchor="middle">Classify</text>
+<text x="165" y="144" text-anchor="middle" class="label-sub">LLM call</text>
+
+<line x1="230" y1="130" x2="246" y2="130" class="edge" marker-end="url(#r-arrow)"></line>
+
+<path d="M290,90 L330,130 L290,170 L250,130 Z" class="node-diamond"></path>
+<text x="290" y="134" text-anchor="middle">Route</text>
+
+<line x1="330" y1="130" x2="376" y2="47" class="edge edge--dashed" marker-end="url(#r-arrow)"></line>
+<line x1="330" y1="130" x2="376" y2="130" class="edge edge--accent" marker-end="url(#r-arrow-accent)"></line>
+<line x1="330" y1="130" x2="376" y2="217" class="edge edge--dashed" marker-end="url(#r-arrow)"></line>
+
+<rect x="380" y="20" width="140" height="54" rx="6" class="node-box"></rect>
+<text x="450" y="44" text-anchor="middle">Handler A</text>
+<text x="450" y="61" text-anchor="middle" class="label-sub">bug report</text>
+
+<rect x="380" y="103" width="140" height="54" rx="6" class="node-box node-box--accent"></rect>
+<text x="450" y="127" text-anchor="middle">Handler B</text>
+<text x="450" y="144" text-anchor="middle" class="label-sub">feature request</text>
+
+<rect x="380" y="190" width="140" height="54" rx="6" class="node-box"></rect>
+<text x="450" y="214" text-anchor="middle">Handler C</text>
+<text x="450" y="231" text-anchor="middle" class="label-sub">domanda generica</text>
+
+<line x1="520" y1="47" x2="716" y2="126" class="edge edge--dashed" marker-end="url(#r-arrow)"></line>
+<line x1="520" y1="130" x2="716" y2="130" class="edge edge--accent" marker-end="url(#r-arrow-accent)"></line>
+<line x1="520" y1="217" x2="716" y2="134" class="edge edge--dashed" marker-end="url(#r-arrow)"></line>
+
+<circle cx="740" cy="130" r="20" class="node-io"></circle>
+<text x="740" y="135" text-anchor="middle">Out</text>
+</svg>
+<p class="diagram-caption">Il classifier è una singola chiamata LLM; quale branch si accende (qui, Handler B) dipende dal suo output — ma la struttura dei branch e la decisione di seguirne uno solo restano scritte da te, in anticipo.</p>
+</div>
+
+<h2>Quando usarlo</h2>
+<p>
+Routing conviene quando riconosci categorie <strong>distinte</strong> nel tuo input, e ognuna beneficia di un prompt
+(o anche di un modello) diverso — per esempio domande semplici instradate a un modello economico e veloce, domande
+complesse a un modello più capace<sup class="sidenote-ref">3</sup>. Non conviene se le categorie si sovrappongono
+molto, o se il classifier stesso è inaffidabile: un routing sbagliato manda l'input all'handler sbagliato senza
+possibilità di recupero, a meno che tu non aggiunga un fallback esplicito.
+</p>
+<p class="sidenote"><span class="sidenote-number">3.</span> Esempio citato da Anthropic: instradare domande facili a Claude Haiku e domande difficili/insolite a un modello più capace, per bilanciare costo e qualità.</p>
+
+<div class="callout win">
+<p>Alla fine di questa lezione saprai: riconoscere uno scenario di routing e distinguerlo da prompt chaining e da parallelization, spiegare perché la separazione in handler specializzati migliora l'accuratezza, e scrivere un routing nel Workflow tool senza cercare un primitivo che non esiste.</p>
+</div>
+
+<h2>Mapping sul Workflow tool di Claude Code</h2>
+<p>
+A differenza di prompt chaining e parallelization, il Workflow tool <strong>non ha un primitivo dedicato</strong> per
+routing — e questo è il punto da ricordare, non una lacuna. Routing è già codice fisso <em>ordinario</em>: un
+<code>agent()</code> di classificazione, seguito da un <code>if</code>/<code>switch</code> JavaScript qualunque che
+decide quale <code>agent()</code> chiamare dopo. Non c'è bisogno di <code>pipeline()</code> (che farebbe passare
+<em>tutti</em> gli item per <em>tutti</em> gli stage) né di <code>parallel()</code> (che eseguirebbe più branch
+<em>contemporaneamente</em>, aspettandoli tutti): routing esegue esattamente un branch, deciso dal risultato della
+classificazione.
+</p>
+<pre><code>const classification = await agent(
+  `Classifica questa richiesta in bug, feature o domanda generica: ${input}`,
+  { schema: CLASS_SCHEMA }
+)
+
+const result =
+  classification.categoria === "bug"
+    ? await agent(`Gestisci come bug report: ${input}`, { schema: BUG_SCHEMA })
+    : classification.categoria === "feature"
+    ? await agent(`Gestisci come feature request: ${input}`, { schema: FEATURE_SCHEMA })
+    : await agent(`Rispondi alla domanda generale: ${input}`)</code></pre>
+<p>
+Nota cosa succede se hai una lista di richieste da instradare: usi comunque <code>pipeline()</code> per farle scorrere
+una alla volta attraverso "classifica poi instrada", ma il secondo stage della pipeline <em>è</em> questo blocco
+condizionale — routing e prompt chaining non si escludono, si compongono.
+</p>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="routing">
+  <p class="quiz-question">1. Un ticket di supporto viene prima classificato come "billing", "technical" o "general", poi inviato a UN SOLO prompt specializzato per quella categoria. Che pattern è?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="chaining" data-explain="Non qui: prompt chaining fa passare l'output attraverso PIÙ step in sequenza sullo stesso input — qui invece la classificazione porta a UN solo handler, non a una catena.">Prompt chaining</button>
+    <button class="quiz-option" data-key="routing" data-explain="Esatto: classificazione seguita da un unico branch fisso verso un handler specializzato è routing.">Routing</button>
+    <button class="quiz-option" data-key="parallelization" data-explain="Non qui: parallelization eseguirebbe più handler insieme e aggregherebbe i risultati — qui invece ne viene eseguito uno solo.">Parallelization</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="classifier">
+  <p class="quiz-question">2. Come si chiama, nel vocabolario del pattern, lo step che decide quale handler riceverà l'input?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="gate" data-explain="Un Gate verifica un output intermedio in una chain e decide se farlo proseguire o fermarsi — non sceglie TRA più handler diversi.">Gate</button>
+    <button class="quiz-option" data-key="classifier" data-explain="Esatto: il classifier è lo step (LLM o modello tradizionale) che assegna l'input a una categoria, da cui dipende il branch.">Classifier</button>
+    <button class="quiz-option" data-key="subagent" data-explain="Un Subagent è un worker delegato con contesto proprio, tipico di orchestrator-workers — non lo step di classificazione di routing.">Subagent</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="nessuno">
+  <p class="quiz-question">3. Quale primitivo del Workflow tool implementa direttamente il routing, così come pipeline() implementa prompt chaining?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="pipeline" data-explain="pipeline() fa passare ogni item attraverso TUTTI gli stage in sequenza — non è pensato per scegliere un solo branch tra più alternative.">pipeline()</button>
+    <button class="quiz-option" data-key="nessuno" data-explain="Esatto: routing è già codice ordinario — un agent() di classificazione seguito da un if/switch — non serve un primitivo dedicato.">Nessuno, è un if/switch ordinario</button>
+    <button class="quiz-option" data-key="parallel" data-explain="parallel() esegue più thunk insieme e aspetta tutti i risultati — routing invece ne esegue esattamente uno solo.">parallel()</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="specializzazione">
+  <p class="quiz-question">4. Perché scrivere tre handler distinti per bug/feature/domanda invece di un unico prompt generico che gestisce tutti i casi?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="velocita" data-explain="La velocità non è il motivo principale citato da Anthropic per routing — anzi il classifier aggiunge una chiamata in più rispetto a un prompt unico.">Velocità di risposta</button>
+    <button class="quiz-option" data-key="specializzazione" data-explain="Esatto: ogni handler può essere ottimizzato solo per il proprio caso — separation of concerns — invece di un prompt che deve andare bene ovunque.">Specializzazione per caso</button>
+    <button class="quiz-option" data-key="costo" data-explain="Il costo può scendere come effetto collaterale (es. modelli diversi per categoria), ma non è la ragione strutturale per cui si separano gli handler.">Riduzione dei costi</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="parallelization">
+  <p class="quiz-question">5. Se invece la stessa richiesta venisse fatta passare per PIÙ handler contemporaneamente, e i risultati aggregati insieme, che pattern sarebbe?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="routing" data-explain="Non qui: routing ne esegue esattamente UNO, scelto dalla classificazione — qui invece vengono eseguiti tutti insieme.">Routing</button>
+    <button class="quiz-option" data-key="parallelization" data-explain="Esatto: più branch eseguiti insieme e poi aggregati è parallelization — il prossimo pattern della lista.">Parallelization</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p><a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>, sezione "Routing". Guarda in particolare l'esempio di instradare domande facili verso un modello economico e domande difficili verso uno più capace — è il caso d'uso citato più spesso per questo pattern.</p>
+</div>
+
+<div class="callout ask">
+<p>Se il confine tra routing e parallelization, o il motivo per cui non serve un primitivo dedicato nel Workflow tool, non ti è chiaro — chiedimelo. Vale anche se vuoi vedere un esempio di routing agganciato a un caso reale del tuo lavoro (es. instradare richieste diverse a subagent diversi).</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents</a>. Termini consolidati: <a href="../reference/glossary.html">Glossario</a>. Lezione precedente: <a href="0002-prompt-chaining.html">0002 — Prompt Chaining</a>.</p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0004 · Parallelization</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/diagrams.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Parallelization: nessuna dipendenza, aggregazione fissa</h1>
+<p class="kicker">Lezione 0004 — il terzo pattern, e la barriera esplicita di parallel()</p>
+
+<p>
+Nella <a href="0003-routing.html">lezione 0003</a> un solo branch veniva eseguito, scelto da un classifier.
+<strong>Parallelization</strong> è l'opposto: <strong>più</strong> chiamate LLM partono nello stesso momento, senza
+che una dipenda dall'output dell'altra, e i risultati vengono aggregati <strong>programmaticamente</strong> alla
+fine<sup class="sidenote-ref">1</sup>. Nessun classifier decide "quale": partono tutte, sempre.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>, sezione "Parallelization".</p>
+
+<h2>Due varianti, stessa struttura</h2>
+<p>
+Anthropic distingue due varianti<sup class="sidenote-ref">2</sup>. <strong>Sectioning</strong>: scomponi un task in
+sotto-task <em>indipendenti</em> e distinti — es. controlla lo stesso pezzo di codice per bug di sicurezza, di
+performance e di stile, in tre chiamate parallele, poi unisci i tre report in uno solo. <strong>Voting</strong>: fai
+eseguire lo <em>stesso identico</em> task più volte in parallelo, e prendi il risultato di maggioranza o il consenso —
+utile quando vuoi più "opinioni" indipendenti sulla stessa domanda per alzare la confidenza (es. più chiamate che
+valutano indipendentemente se un contenuto viola una policy).
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> Testuale: "Sectioning: Breaking a task into independent subtasks run in parallel. Voting: Running the same task multiple times to get diverse outputs."</p>
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 620 300" role="img" aria-labelledby="parallel-diagram-title">
+<title id="parallel-diagram-title">Diagramma del pattern Parallelization (sectioning): In si divide in tre LLM Call indipendenti eseguite insieme, poi un nodo Aggregate le unisce prima di Out.</title>
+<defs>
+  <marker id="p-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+  </marker>
+</defs>
+
+<text x="10" y="20" class="row-label">Parallelization — sectioning</text>
+
+<circle cx="40" cy="150" r="18" class="node-io"></circle>
+<text x="40" y="155" text-anchor="middle">In</text>
+
+<line x1="58" y1="150" x2="100" y2="47" class="edge" marker-end="url(#p-arrow)"></line>
+<line x1="58" y1="150" x2="100" y2="150" class="edge" marker-end="url(#p-arrow)"></line>
+<line x1="58" y1="150" x2="100" y2="253" class="edge" marker-end="url(#p-arrow)"></line>
+
+<rect x="104" y="20" width="150" height="54" rx="6" class="node-box"></rect>
+<text x="179" y="44" text-anchor="middle">LLM Call</text>
+<text x="179" y="61" text-anchor="middle" class="label-sub">sicurezza</text>
+
+<rect x="104" y="123" width="150" height="54" rx="6" class="node-box"></rect>
+<text x="179" y="147" text-anchor="middle">LLM Call</text>
+<text x="179" y="164" text-anchor="middle" class="label-sub">performance</text>
+
+<rect x="104" y="226" width="150" height="54" rx="6" class="node-box"></rect>
+<text x="179" y="250" text-anchor="middle">LLM Call</text>
+<text x="179" y="267" text-anchor="middle" class="label-sub">stile</text>
+
+<line x1="254" y1="47" x2="300" y2="150" class="edge" marker-end="url(#p-arrow)"></line>
+<line x1="254" y1="150" x2="300" y2="150" class="edge" marker-end="url(#p-arrow)"></line>
+<line x1="254" y1="253" x2="300" y2="150" class="edge" marker-end="url(#p-arrow)"></line>
+
+<rect x="304" y="123" width="140" height="54" rx="6" class="node-box node-box--accent"></rect>
+<text x="374" y="147" text-anchor="middle">Aggregate</text>
+<text x="374" y="164" text-anchor="middle" class="label-sub">join fisso</text>
+
+<line x1="444" y1="150" x2="542" y2="150" class="edge" marker-end="url(#p-arrow)"></line>
+
+<circle cx="562" cy="150" r="18" class="node-io"></circle>
+<text x="562" y="155" text-anchor="middle">Out</text>
+</svg>
+<p class="diagram-caption">Le tre chiamate partono nello stesso momento, senza dipendenza tra loro — a differenza del routing, qui non c'è un nodo decisionale che ne sceglie una sola. L'aggregazione che le riunisce è codice fisso, scritto da te.</p>
+</div>
+
+<h2>Quando usarlo</h2>
+<p>
+Sectioning conviene quando il task si scompone in aspetti davvero indipendenti — nessuno ha bisogno dell'output degli
+altri per essere svolto — e parallelizzarli riduce la latenza totale rispetto a farli in sequenza. Voting conviene
+quando un singolo tentativo è rumoroso e più tentativi indipendenti, aggregati per maggioranza, danno un risultato
+più affidabile di uno solo<sup class="sidenote-ref">3</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">3.</span> Il costo è ovvio: N chiamate invece di una, eseguite in parallelo per contenere la latenza ma non il costo in token/richieste.</p>
+
+<div class="callout win">
+<p>Alla fine di questa lezione saprai: distinguere parallelization da routing (nessun branch scelto, li eseguono tutti) e da prompt chaining (nessuna dipendenza sequenziale tra le chiamate), riconoscere sectioning vs voting, e scrivere una parallelizzazione con parallel() nel Workflow tool.</p>
+</div>
+
+<h2>Mapping sul Workflow tool di Claude Code</h2>
+<p>
+<code>parallel()</code> implementa parallelization letteralmente: è una <strong>barriera</strong> — lancia tutti i
+thunk insieme e aspetta che finiscano tutti prima di restituire l'array dei risultati. L'aggregazione (il nodo
+"Aggregate" nel diagramma) è il codice ordinario che scrivi <em>dopo</em> l'await, non un'altra chiamata decisionale
+del modello.
+</p>
+<pre><code>const [sicurezza, performance, stile] = await parallel([
+  () => agent(`Controlla vulnerabilità di sicurezza in questo diff: ${diff}`, { schema: REVIEW_SCHEMA }),
+  () => agent(`Controlla problemi di performance in questo diff: ${diff}`, { schema: REVIEW_SCHEMA }),
+  () => agent(`Controlla violazioni di stile in questo diff: ${diff}`, { schema: REVIEW_SCHEMA }),
+])
+
+const report = [sicurezza, performance, stile]   // <- aggregazione: codice fisso, non un'altra agent()
+  .filter(Boolean)
+  .flatMap(r => r.findings)</code></pre>
+<p>
+Nota il contrasto con <code>pipeline()</code>: lì lo stage <em>n</em> dipende dall'output dello stage <em>n-1</em>,
+quindi un item può avanzare più velocemente di un altro (nessuna barriera). Qui invece <code>parallel()</code>
+<em>è</em> la barriera — tutti i thunk devono finire prima che tu possa procedere con l'aggregazione.
+</p>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="parallelization">
+  <p class="quiz-question">1. Analizzi lo stesso diff contemporaneamente per bug di sicurezza, di performance e di stile in tre chiamate indipendenti, poi unisci i tre risultati in un report. Che pattern è?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="routing" data-explain="Non qui: routing eseguirebbe UN SOLO handler scelto da un classifier — qui invece vengono eseguite tutte e tre le chiamate, sempre.">Routing</button>
+    <button class="quiz-option" data-key="parallelization" data-explain="Esatto: tre sotto-task indipendenti eseguiti insieme e poi aggregati programmaticamente è parallelization, variante sectioning.">Parallelization</button>
+    <button class="quiz-option" data-key="chaining" data-explain="Non qui: prompt chaining richiede che l'output di uno step diventi input del successivo — qui le tre chiamate non dipendono l'una dall'altra.">Prompt chaining</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="voting">
+  <p class="quiz-question">2. Fai valutare la stessa identica domanda a 5 chiamate LLM indipendenti e prendi la risposta di maggioranza. Quale sottotipo di parallelization è?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="sectioning" data-explain="Sectioning scompone il task in sotto-task DIVERSI e indipendenti — qui invece è lo stesso identico task ripetuto più volte.">Sectioning</button>
+    <button class="quiz-option" data-key="voting" data-explain="Esatto: stesso task eseguito più volte in parallelo, risultato aggregato per maggioranza/consenso, è la variante voting.">Voting</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="parallel">
+  <p class="quiz-question">3. Quale primitivo del Workflow tool implementa direttamente parallelization?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="pipeline" data-explain="pipeline() fa dipendere ogni stage dall'output dello stage precedente — è il primitivo di prompt chaining, non di parallelization.">pipeline()</button>
+    <button class="quiz-option" data-key="parallel" data-explain="Esatto: parallel() lancia tutti i thunk insieme e aspetta (barriera) che finiscano tutti prima di restituire i risultati.">parallel()</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="barriera">
+  <p class="quiz-question">4. Qual è la differenza chiave, in termini di esecuzione, tra pipeline() e parallel() nel Workflow tool?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="barriera" data-explain="Esatto: parallel() è una barriera che aspetta tutti i thunk insieme; pipeline() invece non ha barriera tra stage — un item può avanzare più velocemente di un altro.">parallel() è una barriera, pipeline() no</button>
+    <button class="quiz-option" data-key="costo" data-explain="Il costo in token non è la differenza definitoria tra i due primitivi — entrambi possono fare lo stesso numero di chiamate; cambia solo la dipendenza tra step.">pipeline() costa meno token</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="orchestrator">
+  <p class="quiz-question">5. Se invece il NUMERO e il TIPO di sotto-task non fossero fissati in anticipo, ma decisi dinamicamente da un LLM centrale in base al task specifico, che pattern sarebbe?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="parallelization" data-explain="Non qui: in parallelization i sotto-task e il loro numero sono decisi in anticipo da te, nel codice — qui invece li decide dinamicamente il modello.">Parallelization</button>
+    <button class="quiz-option" data-key="orchestrator" data-explain="Esatto: un LLM centrale che scompone dinamicamente il task e delega ai worker è orchestrator-workers — il prossimo pattern della lista, già nel glossario dalla lezione 0001.">Orchestrator-workers</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p><a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents — Anthropic Engineering</a>, sezione "Parallelization". Guarda in particolare i due esempi separati per sectioning e voting.</p>
+</div>
+
+<div class="callout ask">
+<p>Se il confine tra sectioning e voting, o tra la barriera di parallel() e il flusso senza barriera di pipeline(), non ti è chiaro — chiedimelo. Vale anche per un esempio agganciato a un caso reale, come una code review parallela sul tuo codice.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents</a>. Termini consolidati: <a href="../reference/glossary.html">Glossario</a>. Lezione precedente: <a href="0003-routing.html">0003 — Routing</a>.</p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

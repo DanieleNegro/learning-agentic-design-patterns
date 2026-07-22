@@ -37,14 +37,34 @@ o si corregge, la definizione qui viene aggiornata — non duplicata.
 <table>
 <tr><th>Termine</th><th>Definizione</th><th>Confermato in</th></tr>
 <tr>
+  <td><strong>Prompt chaining</strong></td>
+  <td>Scompone un task in una sequenza fissa di chiamate LLM, dove l'output di ogni step diventa l'input del successivo. Primitivo concreto: <code>pipeline()</code>.</td>
+  <td><a href="../lessons/0002-prompt-chaining.html">0002</a></td>
+</tr>
+<tr>
+  <td><strong>Gate</strong></td>
+  <td>Controllo programmatico (non un'altra decisione del modello) inserito tra due step di una chain, che verifica l'output intermedio prima di lasciarlo proseguire.</td>
+  <td><a href="../lessons/0002-prompt-chaining.html">0002</a></td>
+</tr>
+<tr>
   <td><strong>Routing</strong></td>
-  <td>Classifica l'input e lo instrada verso <em>un solo</em> handler specializzato fisso — un unico branch, deciso a runtime dal codice, non dal modello.</td>
-  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a></td>
+  <td>Classifica l'input e lo instrada verso <em>un solo</em> handler specializzato fisso — un unico branch, deciso a runtime dal codice, non dal modello. Il motivo per separare gli handler è la specializzazione per caso, non (primariamente) il costo.</td>
+  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a>, <a href="../lessons/0003-routing.html">0003</a></td>
+</tr>
+<tr>
+  <td><strong>Classifier</strong></td>
+  <td>Lo step (LLM o modello di classificazione tradizionale) che assegna l'input a una categoria, da cui dipende quale handler di routing viene eseguito.</td>
+  <td><a href="../lessons/0003-routing.html">0003</a></td>
+</tr>
+<tr>
+  <td><strong>Parallelization</strong></td>
+  <td>Più chiamate LLM indipendenti eseguite insieme (nessuna dipende dall'output di un'altra), poi aggregate programmaticamente. Due varianti: <em>sectioning</em> (sotto-task diversi) e <em>voting</em> (stesso task ripetuto, maggioranza). Primitivo concreto: <code>parallel()</code>, una barriera esplicita.</td>
+  <td><a href="../lessons/0004-parallelization.html">0004</a></td>
 </tr>
 <tr>
   <td><strong>Orchestrator-workers</strong></td>
-  <td>Un LLM centrale scompone dinamicamente il task e delega sotto-task a worker (Subagent) con contesto separato; il ciclo orchestratore→worker→sintesi resta codice fisso.</td>
-  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a></td>
+  <td>Un LLM centrale scompone dinamicamente il task e delega sotto-task a worker (Subagent) con contesto separato; il ciclo orchestratore→worker→sintesi resta codice fisso. A differenza di parallelization, il numero e la natura dei sotto-task NON sono fissati in anticipo nel codice — li decide l'orchestrator a runtime.</td>
+  <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a>, <a href="../lessons/0005-orchestrator-workers.html">0005</a></td>
 </tr>
 </table>
 
