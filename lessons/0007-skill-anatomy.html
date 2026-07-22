@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0007 · Anatomia di una Skill</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/diagrams.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Anatomia di una Skill: cosa entra in contesto, e quando</h1>
+<p class="kicker">Lezione 0007 — primo capitolo sul secondo asse della mission, con un esempio che hai già sotto mano</p>
+
+<p>
+Le lezioni 0001-0006 hanno coperto un solo asse della tua mission: i cinque pattern di workflow. Qui si comincia un
+asse diverso — le <strong>Skill</strong>, il meccanismo con cui estendi cosa Claude Code sa fare. Una Skill è un
+file <code>SKILL.md</code> con istruzioni: Claude lo aggiunge al proprio "toolkit" e lo usa quando è rilevante, oppure
+lo invochi tu direttamente con <code>/nome-skill</code><sup class="sidenote-ref">1</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> <a href="https://code.claude.com/docs/en/skills" target="_blank" rel="noopener">Extend Claude with skills — Claude Code Docs</a>, sezione introduttiva.</p>
+
+<h2>L'esempio non è astratto: è questa sessione</h2>
+<p>
+Non serve un esempio inventato: la skill che hai appena invocato scrivendo <code>/teach</code> è un caso reale,
+leggibile in <code>.claude/skills/teach/SKILL.md</code> in questa stessa repository. Il suo frontmatter YAML è:
+</p>
+<pre><code>---
+name: teach
+description: Teach the user a new skill or concept, within this workspace.
+disable-model-invocation: true
+argument-hint: "What would you like to learn about?"
+---</code></pre>
+<p>
+Sotto il frontmatter, il corpo in markdown contiene tutte le istruzioni che hai visto seguire in questa conversazione
+— come strutturare <code>MISSION.md</code>, come titolare una lezione, come usare il glossario. Questo è lo schema
+minimo di ogni Skill: <strong>frontmatter</strong> (che dice a Claude quando/come usarla) più <strong>contenuto
+markdown</strong> (le istruzioni vere e proprie)<sup class="sidenote-ref">2</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> Dei campi di frontmatter possibili, la documentazione è esplicita: "All fields are optional. Only <code>description</code> is recommended so Claude knows when to use the skill."</p>
+
+<h2>Progressive disclosure: tre livelli, tre momenti diversi</h2>
+<p>
+Il motivo per cui conviene una Skill invece di scrivere la stessa procedura in <code>CLAUDE.md</code> è un motivo di
+<strong>costo</strong>: "unlike CLAUDE.md content, a skill's body loads only when it's used, so long reference
+material costs almost nothing until you need it"<sup class="sidenote-ref">3</sup>. In pratica, entrano in contesto
+tre cose, in tre momenti diversi:
+</p>
+<p class="sidenote"><span class="sidenote-number">3.</span> <a href="https://code.claude.com/docs/en/skills" target="_blank" rel="noopener">Extend Claude with skills</a>, introduzione.</p>
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 720 280" role="img" aria-labelledby="skill-diagram-title">
+<title id="skill-diagram-title">Diagramma della progressive disclosure di una Skill: description sempre in contesto, corpo di SKILL.md caricato all'invocazione, file di supporto caricati solo su riferimento esplicito.</title>
+<defs>
+  <marker id="s-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+  </marker>
+</defs>
+
+<text x="10" y="20" class="row-label">Progressive disclosure</text>
+
+<rect x="30" y="110" width="150" height="80" rx="6" class="node-box"></rect>
+<text x="105" y="140" text-anchor="middle">Sempre in contesto</text>
+<text x="105" y="157" text-anchor="middle" class="label-sub">name + description</text>
+<text x="105" y="172" text-anchor="middle" class="label-sub">(poche righe)</text>
+
+<line x1="180" y1="150" x2="222" y2="150" class="edge" marker-end="url(#s-arrow)"></line>
+<text x="201" y="138" text-anchor="middle" class="label-sub">/teach</text>
+
+<rect x="226" y="85" width="200" height="130" rx="6" class="node-box node-box--accent"></rect>
+<text x="326" y="140" text-anchor="middle">Quando invocata</text>
+<text x="326" y="157" text-anchor="middle" class="label-sub">corpo di SKILL.md</text>
+<text x="326" y="172" text-anchor="middle" class="label-sub">(istruzioni)</text>
+
+<line x1="426" y1="150" x2="468" y2="150" class="edge" marker-end="url(#s-arrow)"></line>
+<text x="447" y="138" text-anchor="middle" class="label-sub">rimando</text>
+
+<rect x="472" y="55" width="210" height="190" rx="6" class="node-box"></rect>
+<text x="577" y="140" text-anchor="middle">Su riferimento esplicito</text>
+<text x="577" y="157" text-anchor="middle" class="label-sub">file di supporto</text>
+<text x="577" y="172" text-anchor="middle" class="label-sub">es. MISSION-FORMAT.md</text>
+</svg>
+<p class="diagram-caption">La description entra in contesto ad ogni sessione, sempre. Il corpo di SKILL.md entra solo quando la skill parte. I file di supporto — qui, i vari *-FORMAT.md che il corpo di teach/SKILL.md referenzia — entrano solo se e quando servono davvero.</p>
+</div>
+
+<h2>Chi può invocarla: il campo che hai già visto</h2>
+<p>
+Di default, sia tu sia Claude potete invocare una skill: tu con <code>/nome</code>, Claude automaticamente quando la
+<code>description</code> combacia con la conversazione. <code>teach</code> ha invece
+<code>disable-model-invocation: true</code> — significa che <strong>solo tu</strong> puoi farla partire; Claude non
+la carica mai di sua iniziativa<sup class="sidenote-ref">4</sup>. Ha senso: l'insegnamento è un workflow che vuoi
+scatenare tu, non qualcosa che deve succedere perché la conversazione "sembra" educativa.
+</p>
+<p class="sidenote"><span class="sidenote-number">4.</span> Motivazione esplicita della documentazione per questo campo: "Use this for workflows with side effects or that you want to control timing" — l'esempio canonico citato è <code>/deploy</code>, ma vale altrettanto per un workflow stateful come questo.</p>
+
+<div class="callout win">
+<p>Alla fine di questa lezione saprai: descrivere le due parti di un SKILL.md (frontmatter + corpo), spiegare perché una Skill costa meno di un CLAUDE.md equivalente, distinguere i tre momenti della progressive disclosure, e leggere <code>disable-model-invocation</code> per capire chi può invocare una skill specifica.</p>
+</div>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="solotu">
+  <p class="quiz-question">1. Il file .claude/skills/teach/SKILL.md ha disable-model-invocation: true. Cosa significa in pratica?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="solotu" data-explain="Esatto: con disable-model-invocation: true, solo tu puoi farla partire digitando /teach — Claude non la carica mai di propria iniziativa.">Solo tu puoi invocarla, mai Claude in autonomia</button>
+    <button class="quiz-option" data-key="autoclaude" data-explain="È l'opposto: questo campo impedisce esattamente l'invocazione automatica da parte di Claude, non la abilita.">Claude la invoca automaticamente quando serve</button>
+    <button class="quiz-option" data-key="progetto" data-explain="Il campo riguarda CHI invoca la skill, non DOVE è visibile — la visibilità per livello (personale/progetto) è una questione separata, di percorso del file.">È visibile solo a livello di progetto</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="quandoserve">
+  <p class="quiz-question">2. Un file come MISSION-FORMAT.md dentro .claude/skills/teach/, referenziato dal corpo di SKILL.md, entra in contesto...</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="quandoserve" data-explain="Esatto: è un file di supporto — carica solo quando il corpo di SKILL.md lo referenzia per il task specifico in corso, non prima.">Solo quando referenziato esplicitamente e serve in quel momento</button>
+    <button class="quiz-option" data-key="sempre" data-explain="Se così fosse, la progressive disclosure non avrebbe motivo di esistere: il punto è proprio NON caricare tutto il materiale di riferimento ad ogni invocazione.">Ogni volta che digiti /teach, insieme al corpo</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="costo">
+  <p class="quiz-question">3. Perché conviene mettere una procedura ricorrente in una Skill piuttosto che in CLAUDE.md?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="costo" data-explain="Esatto: CLAUDE.md è sempre in contesto, ad ogni sessione; il corpo di una Skill entra in contesto solo quando viene invocata — costa quasi nulla finché non serve.">Il corpo entra in contesto solo quando invocata, CLAUDE.md sempre</button>
+    <button class="quiz-option" data-key="velocita" data-explain="Non è mai indicato un modello diverso o più veloce come motivo strutturale delle Skill — il vantaggio è sul costo/tempistica di caricamento in contesto, non sull'esecuzione del modello.">Le Skill girano su un modello più veloce</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="description">
+  <p class="quiz-question">4. Quale campo del frontmatter, da solo, permette a Claude di decidere quando invocare automaticamente una skill?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="name" data-explain="name imposta solo l'etichetta mostrata nell'elenco delle skill — il nome del comando viene comunque dal nome della directory, non decide nulla sull'invocazione automatica.">name</button>
+    <button class="quiz-option" data-key="description" data-explain="Esatto: la documentazione lo dice esplicitamente — è l'unico campo raccomandato, ed è quello che Claude confronta con la conversazione per decidere se usare la skill.">description</button>
+    <button class="quiz-option" data-key="argumenthint" data-explain="argument-hint serve solo per l'autocomplete durante la digitazione — non ha alcun ruolo nella decisione di Claude di invocare la skill.">argument-hint</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="supporto">
+  <p class="quiz-question">5. La skill teach include altri file oltre a SKILL.md (MISSION-FORMAT.md, LEARNING-RECORD-FORMAT.md, RESOURCES-FORMAT.md). Che ruolo hanno rispetto al corpo principale?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="supporto" data-explain="Esatto: sono file di supporto — tengono SKILL.md snello, e caricano in contesto solo quando il corpo li referenzia per un bisogno specifico.">Sono file di supporto, caricati solo su riferimento</button>
+    <button class="quiz-option" data-key="frontmatter" data-explain="Il frontmatter sta solo nell'intestazione YAML di SKILL.md stesso — questi sono file markdown separati nella cartella della skill, non parte del suo frontmatter.">Fanno parte del frontmatter di SKILL.md</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p><a href="https://code.claude.com/docs/en/skills" target="_blank" rel="noopener">Extend Claude with skills — Claude Code Docs</a>. Leggi in particolare "Configure skills" e la tabella dei campi frontmatter — qui ne hai visti solo due (<code>description</code>, <code>disable-model-invocation</code>) sui molti disponibili.</p>
+</div>
+
+<div class="callout ask">
+<p>Se il confine tra "sempre in contesto" e "caricato su richiesta" non ti torna, o vuoi vedere il corpo completo di .claude/skills/teach/SKILL.md riga per riga — chiedimelo. La prossima lezione di questo filone ti farà scrivere una Skill minima da zero: questa è la teoria che ti serve prima di farlo.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://code.claude.com/docs/en/skills" target="_blank" rel="noopener">Extend Claude with skills</a>. Termini consolidati: <a href="../reference/glossary.html">Glossario</a>. Lezione precedente: <a href="0006-evaluator-optimizer.html">0006 — Evaluator-optimizer</a>.</p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>
