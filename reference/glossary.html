@@ -72,6 +72,16 @@ o si corregge, la definizione qui viene aggiornata — non duplicata.
 <table>
 <tr><th>Termine</th><th>Definizione</th><th>Confermato in</th></tr>
 <tr>
+  <td><strong>Skill</strong></td>
+  <td>File <code>SKILL.md</code> (frontmatter YAML + corpo markdown) che estende cosa Claude sa fare. Claude la usa quando la <code>description</code> è rilevante, oppure la invochi tu con <code>/nome-skill</code>. A differenza di CLAUDE.md, il corpo carica in contesto solo quando la skill viene invocata.</td>
+  <td><a href="../lessons/0007-skill-anatomy.html">0007</a></td>
+</tr>
+<tr>
+  <td><strong>Progressive disclosure</strong> <span class="sidenote" style="display:inline">(per le Skill)</span></td>
+  <td>Tre livelli sequenziali di caricamento in contesto: (1) <code>description</code>, sempre presente; (2) corpo di SKILL.md, solo quando la skill è invocata; (3) file di supporto referenziati dal corpo, solo quando servono davvero in quel momento.</td>
+  <td><a href="../lessons/0007-skill-anatomy.html">0007</a></td>
+</tr>
+<tr>
   <td><strong>Hook</strong></td>
   <td>Comando eseguito automaticamente a un evento fisso del ciclo di vita (es. <code>PostToolUse</code>) — gira sempre, indipendentemente da cosa "decide" il modello.</td>
   <td><a href="../lessons/0001-workflow-vs-agent.html">0001</a></td>

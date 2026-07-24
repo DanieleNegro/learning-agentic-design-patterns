@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0009 · Anatomia di un Hook</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/diagrams.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Anatomia di un Hook: applicare, non chiedere</h1>
+<p class="kicker">Lezione 0009 — terzo asse della mission, in contrasto diretto con quello appena chiuso</p>
+
+<p>
+Hai appena chiuso l'asse Skill: un file che Claude <em>legge e segue</em>, per sua scelta o su tuo comando esplicito.
+Un <strong>Hook</strong> è l'opposto strutturale: un comando shell che <em>gira sempre</em> a un punto fisso del ciclo
+di vita, indipendentemente da cosa il modello "decide"<sup class="sidenote-ref">1</sup>. Il glossario lo definiva già
+così dalla lezione 0001 — qui vedi perché quella distinzione conta davvero.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> <a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks reference — Claude Code Docs</a>: "The model can be asked to follow rules, but hooks enforce them."</p>
+
+<h2>Il problema che una Skill non può risolvere</h2>
+<p>
+Potresti scrivere in <code>CLAUDE.md</code> o in una Skill: "non lanciare mai <code>rm -rf</code>". Claude di solito
+obbedisce. Ma "di solito" non è una garanzia — è una richiesta che il modello potrebbe violare in certe condizioni.
+Un Hook risolve un problema diverso: non "convincere" Claude a non farlo, ma <strong>impedirlo strutturalmente</strong>,
+con codice che gira prima che il tool venga eseguito e può bloccarlo<sup class="sidenote-ref">2</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> Stesso principio di <code>disable-model-invocation</code> visto per le Skill (0007, 0008), ma spinto un livello più in basso: lì decidevi chi <em>invoca</em>, qui decidi cosa <em>può accadere</em>, a prescindere da chi lo invoca.</p>
+
+<h2>Tre pezzi: evento, matcher, handler</h2>
+<p>
+Un Hook si configura in <code>settings.json</code> (personale, di progetto, o <code>.local.json</code> non
+condiviso) con tre livelli annidati: l'<strong>evento</strong> del ciclo di vita a cui si aggancia, il
+<strong>matcher</strong> che restringe a quali casi si applica, e l'<strong>handler</strong> — il comando vero e
+proprio<sup class="sidenote-ref">3</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">3.</span> <a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks reference</a>, sezione "Configuration structure".</p>
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 720 220" role="img" aria-labelledby="hook-diagram-title">
+<title id="hook-diagram-title">Diagramma della struttura di un hook: evento del ciclo di vita, poi matcher che filtra, poi handler che esegue il comando.</title>
+<defs>
+  <marker id="h-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+  </marker>
+</defs>
+
+<text x="10" y="20" class="row-label">PreToolUse: Bash("rm -rf ...")</text>
+
+<rect x="30" y="70" width="180" height="90" rx="6" class="node-box"></rect>
+<text x="120" y="105" text-anchor="middle">Evento</text>
+<text x="120" y="122" text-anchor="middle" class="label-sub">PreToolUse</text>
+<text x="120" y="139" text-anchor="middle" class="label-sub">(prima del tool call)</text>
+
+<line x1="210" y1="115" x2="252" y2="115" class="edge" marker-end="url(#h-arrow)"></line>
+
+<rect x="256" y="70" width="180" height="90" rx="6" class="node-box node-box--accent"></rect>
+<text x="346" y="105" text-anchor="middle">Matcher</text>
+<text x="346" y="122" text-anchor="middle" class="label-sub">"Bash"</text>
+<text x="346" y="139" text-anchor="middle" class="label-sub">(filtra per tool)</text>
+
+<line x1="436" y1="115" x2="478" y2="115" class="edge" marker-end="url(#h-arrow)"></line>
+
+<rect x="482" y="70" width="210" height="90" rx="6" class="node-box"></rect>
+<text x="587" y="100" text-anchor="middle">Handler</text>
+<text x="587" y="117" text-anchor="middle" class="label-sub">block-rm.sh legge stdin</text>
+<text x="587" y="134" text-anchor="middle" class="label-sub">exit 2 → tool bloccato</text>
+</svg>
+<p class="diagram-caption">L'evento decide QUANDO il hook può girare. Il matcher decide SU COSA (qui, solo tool call Bash). L'handler è il comando che gira davvero e decide l'esito con il proprio exit code.</p>
+</div>
+
+<h2>Cosa riceve, cosa restituisce</h2>
+<p>
+L'handler riceve JSON su <strong>stdin</strong> — per un <code>PreToolUse</code> su Bash, include
+<code>tool_name</code> e <code>tool_input.command</code>. Decide l'esito con l'<strong>exit code</strong>, non con il
+testo stampato a caso<sup class="sidenote-ref">4</sup>:
+</p>
+<ul>
+<li><strong>Exit 0</strong>: nessuna obiezione. Se stampa JSON su stdout, Claude Code lo interpreta come decisione strutturata (es. <code>permissionDecision</code>); altrimenti flusso normale.</li>
+<li><strong>Exit 2</strong>: errore bloccante. Su <code>PreToolUse</code>, blocca il tool call; su <code>Stop</code>, impedisce a Claude di fermarsi. Il messaggio su stderr torna a Claude come errore.</li>
+<li><strong>Qualsiasi altro exit code</strong>: errore non bloccante — l'esecuzione continua comunque, l'errore finisce solo nel transcript/debug log.</li>
+</ul>
+<p class="sidenote"><span class="sidenote-number">4.</span> <a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks reference</a>, sezione "Exit code semantics". Nota bene: exit 2 su un evento che non può più bloccare nulla (es. <code>PostToolUse</code>, il tool è già girato) non ha lo stesso effetto — dipende dall'evento.</p>
+
+<pre><code>{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/block-rm.sh"
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+
+<pre><code>#!/bin/bash
+COMMAND=$(jq -r '.tool_input.command')
+if echo "$COMMAND" | grep -q 'rm -rf'; then
+  jq -n '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: "Destructive command blocked by hook"
+    }
+  }'
+else
+  exit 0
+fi</code></pre>
+
+<div class="callout win">
+<p>Alla fine di questa lezione saprai: spiegare perché un Hook garantisce ciò che una Skill può solo chiedere, leggere la struttura evento → matcher → handler in settings.json, e distinguere cosa fanno exit 0, exit 2 e ogni altro exit code — inclusa la differenza tra bloccare un PreToolUse e "bloccare" un evento che è già successo.</p>
+</div>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="garantisce">
+  <p class="quiz-question">1. Qual è la differenza sostanziale tra scrivere "non usare rm -rf" in una Skill e bloccarlo con un Hook?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="garantisce" data-explain="Esatto: la Skill è una richiesta che il modello può violare; l'Hook è codice che gira sempre a quel punto del ciclo di vita e può impedire il tool call strutturalmente.">La Skill è una richiesta al modello, l'Hook è un'esecuzione garantita</button>
+    <button class="quiz-option" data-key="velocita" data-explain="Nessuna delle due fonti indica una differenza di velocità come motivo strutturale — la differenza è tra 'chiedere' e 'applicare', non tra 'lento' e 'veloce'.">L'Hook è solo una versione più veloce della Skill</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="bash">
+  <p class="quiz-question">2. Nell'esempio, il matcher è "Bash" sull'evento PreToolUse. Cosa fa esattamente il matcher?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="bash" data-explain="Esatto: il matcher restringe l'hook ai soli tool call che combaciano — qui, solo quando il tool invocato è Bash, ignorando Read, Edit, ecc.">Filtra: l'hook gira solo se il tool invocato combacia</button>
+    <button class="quiz-option" data-key="comando" data-explain="Il matcher filtra per NOME del tool (qui Bash) — dentro quel filtro, è lo script dell'handler a leggere tool_input.command e decidere caso per caso, non il matcher stesso.">Legge il comando specifico ed esegue solo se contiene rm</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="blocca">
+  <p class="quiz-question">3. L'handler esce con exit code 2 su un evento PreToolUse. Cosa succede al tool call?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="blocca" data-explain="Esatto: su PreToolUse, exit 2 è un errore bloccante — il tool call viene impedito e stderr torna a Claude come messaggio d'errore.">Viene bloccato, e stderr torna a Claude come errore</button>
+    <button class="quiz-option" data-key="continua" data-explain="Questo è il comportamento di un exit code diverso da 0 e 2 (errore non bloccante) — exit 2 su PreToolUse blocca specificamente il tool call, non lo lascia passare.">Gira comunque, l'errore finisce solo nel debug log</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="dipende">
+  <p class="quiz-question">4. Lo stesso exit code 2 su un hook PostToolUse (dopo che il tool è già girato) blocca il tool call allo stesso modo di PreToolUse?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="dipende" data-explain="Esatto: l'effetto di exit 2 dipende dall'evento. Su PostToolUse il tool è già stato eseguito — non c'è più nulla da bloccare in quel senso; per la maggior parte degli eventi diversi da PreToolUse/UserPromptSubmit/Stop, exit 2 semplicemente non può bloccare qualcosa che è già accaduto.">No: l'effetto di exit 2 dipende da quale evento lo genera</button>
+    <button class="quiz-option" data-key="sempre" data-explain="Non è così: il significato di exit 2 è specifico per evento. Su un evento dove l'azione è già avvenuta (come PostToolUse), non c'è più un tool call da bloccare.">Sì, exit 2 blocca sempre allo stesso identico modo</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="stdin">
+  <p class="quiz-question">5. Come riceve l'handler le informazioni sul tool call in corso (es. il comando Bash da valutare)?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="stdin" data-explain="Esatto: per gli hook di tipo command, il JSON con session_id, tool_name, tool_input ecc. arriva su stdin — lo script lo legge con strumenti come jq.">Come JSON su stdin, letto dallo script</button>
+    <button class="quiz-option" data-key="argv" data-explain="Il campo 'args' in settings.json configura argomenti extra per il comando, ma le informazioni sul tool call (tool_name, tool_input) arrivano come JSON su stdin, non come argomento posizionale.">Come argomento posizionale nella riga di comando</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p><a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks reference — Claude Code Docs</a>. Qui hai visto un solo evento (<code>PreToolUse</code>) e un solo tipo di handler (<code>command</code>) sui molti disponibili — vedi la sezione "Hook Events" per l'elenco completo (<code>SessionStart</code>, <code>Stop</code>, <code>UserPromptSubmit</code>, ecc.).</p>
+</div>
+
+<div class="callout ask">
+<p>Se vuoi capire quando conviene un hook di tipo <code>prompt</code> invece di <code>command</code> (non ancora visto), o discutere quale evento agganciare per un comportamento del tuo harness — chiedimelo. La prossima lezione di questo filone ti farà scrivere e testare un Hook vero, come è successo con la Skill review-checklist.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks reference</a>. Termini consolidati: <a href="../reference/glossary.html">Glossario</a>. Lezione precedente: <a href="0008-build-a-skill.html">0008 — Costruisci la tua prima Skill</a>.</p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

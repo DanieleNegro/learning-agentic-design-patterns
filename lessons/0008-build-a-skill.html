@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0008 · Costruisci la tua prima Skill</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/diagrams.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Costruisci la tua prima Skill: checklist di code review</h1>
+<p class="kicker">Lezione 0008 — lezione pratica, non un altro quiz: qui costruisci l'artefatto che la mission chiede</p>
+
+<p>
+La <a href="0007-skill-anatomy.html">lezione 0007</a> ti ha dato l'anatomia. Questa lezione ti fa scrivere una Skill
+<strong>vera</strong>, che userai davvero: una checklist di code review con i tuoi criteri, invocabile con
+<code>/review-checklist</code> su qualunque diff, in qualunque tuo progetto. È esattamente l'obiettivo dichiarato
+nella tua <a href="../MISSION.md">mission</a>: "ha costruito almeno una Skill custom... che incapsula un workflow di
+sviluppo ricorrente".
+</p>
+
+<h2>Due concetti nuovi che ti servono prima di scrivere il file</h2>
+<p>
+<strong>Dynamic context injection.</strong> Una riga come <code>!`git diff HEAD`</code> dentro <code>SKILL.md</code>
+non dice a Claude "esegui questo comando quando vuoi": il comando gira <em>prima</em>, come preprocessing, e il suo
+output sostituisce il placeholder — Claude riceve il diff già incollato nel testo, non un invito a lanciare
+git da solo<sup class="sidenote-ref">1</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> <a href="https://code.claude.com/docs/en/skills" target="_blank" rel="noopener">Extend Claude with skills — Claude Code Docs</a>, sezione "Inject dynamic context": "This is preprocessing, not something Claude executes. Claude only sees the final result."</p>
+
+<p>
+<strong><code>$ARGUMENTS</code>.</strong> Se lanci <code>/review-checklist src/api.ts</code>, tutto ciò che scrivi
+dopo il nome della skill sostituisce letteralmente <code>$ARGUMENTS</code> ovunque compaia nel corpo — così la stessa
+skill può rivedere "il diff corrente" di default, o un file specifico se lo indichi<sup class="sidenote-ref">2</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> Se non usi <code>$ARGUMENTS</code> nel testo, Claude Code lo appende comunque in coda come <code>ARGUMENTS: &lt;input&gt;</code> — non sparisce mai silenziosamente.</p>
+
+<div class="callout win">
+<p>Alla fine di questa lezione avrai: una Skill personale funzionante in <code>~/.claude/skills/review-checklist/</code>, capirai perché sta a livello personale e non di progetto, e saprai spiegare cosa fanno dynamic context injection e $ARGUMENTS in quel file specifico.</p>
+</div>
+
+<h2>Passo 1 — dove metterla</h2>
+<p>
+Una checklist di code review è un criterio <em>tuo</em>, che vuoi applicare in ogni repository su cui lavori — non
+solo in questo. Per questo va in una skill <strong>personale</strong>, non di progetto<sup class="sidenote-ref">3</sup>:
+</p>
+<pre><code>mkdir -p ~/.claude/skills/review-checklist</code></pre>
+<p class="sidenote"><span class="sidenote-number">3.</span> Dalla tabella "Where skills live": <code>~/.claude/skills/&lt;skill-name&gt;/SKILL.md</code> → "Applies to: All your projects", contro <code>.claude/skills/</code> → "This project only".</p>
+
+<h2>Passo 2 — scrivi SKILL.md</h2>
+<p>
+Questo è uno scheletro <strong>da completare con i tuoi criteri reali</strong> — i quattro punti sotto sono
+segnaposto generici, non la tua checklist. Sostituiscili prima di salvare.
+</p>
+<pre><code>---
+name: review-checklist
+description: Applica la mia checklist di code review al diff corrente o a un file specifico. Usa quando chiedo di rivedere del codice secondo i miei criteri standard.
+disable-model-invocation: true
+argument-hint: "[percorso file, opzionale]"
+---
+
+## Codice da rivedere
+
+$ARGUMENTS
+
+!`git diff HEAD`
+
+## Checklist
+
+Per ognuno di questi punti, valuta il codice sopra e segnala esplicitamente pass/fail con la riga interessata.
+Non aggiungere osservazioni fuori da questi punti, a meno che non sia un bug palese.
+
+1. [SOSTITUISCI: es. "Ogni funzione pubblica ha un test"]
+2. [SOSTITUISCI: es. "Nessun valore hardcoded che dovrebbe essere config"]
+3. [SOSTITUISCI: es. "Gli errori esterni (rete, I/O) sono gestiti, non ignorati"]
+4. [SOSTITUISCI: il tuo criterio più ricorrente — quello che finisci sempre per far notare a voce]</code></pre>
+
+<p>
+Nota <code>disable-model-invocation: true</code>: lo stesso campo della <a href="0007-skill-anatomy.html">lezione
+0007</a>, qui applicato a una scelta tua. Vuoi decidere tu quando far partire una review, non che Claude la lanci di
+propria iniziativa perché la conversazione "sembra" in tema di codice.
+</p>
+
+<h2>Passo 3 — testala</h2>
+<p>
+Vai in un progetto con modifiche non committate e lancia <code>/review-checklist</code>. Poi prova anche
+<code>/review-checklist src/qualcosa.ts</code> per vedere <code>$ARGUMENTS</code> in azione. Il feedback loop qui è il
+più stretto possibile: o la skill applica davvero i tuoi criteri, o non lo fa — e lo vedi subito, non devi
+indovinare<sup class="sidenote-ref">4</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">4.</span> Se Claude non la invoca o la applica male, la documentazione raccomanda di confrontare una sessione con la skill e una senza, prima di riscrivere la description — vedi "Evaluate and iterate on a skill" nella fonte citata sotto.</p>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="prima">
+  <p class="quiz-question">1. La riga !`git diff HEAD` dentro SKILL.md: quando viene eseguita, esattamente?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="prima" data-explain="Esatto: è preprocessing puro — il comando gira prima che Claude veda il contenuto, e l'output sostituisce il placeholder nel testo.">Prima che Claude veda il contenuto della skill</button>
+    <button class="quiz-option" data-key="claude" data-explain="No: Claude non decide se e quando lanciare quel comando — è già stato eseguito e sostituito nel testo prima che il modello riceva il prompt.">Quando Claude decide che gli serve il diff</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="description">
+  <p class="quiz-question">2. Vuoi che Claude proponga questa skill da solo quando gli scrivi "rivedimi questo codice", senza che tu debba digitare /review-checklist. Quale campo del frontmatter è decisivo per questo?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="name" data-explain="name imposta solo l'etichetta mostrata nell'elenco — non è il campo che Claude confronta con la tua richiesta per decidere se usare la skill.">name</button>
+    <button class="quiz-option" data-key="description" data-explain="Esatto: è description che Claude confronta con la conversazione — ma qui hai anche disable-model-invocation: true, quindi in QUESTA skill specifica Claude non la propone comunque mai da solo.">description</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="sostituito">
+  <p class="quiz-question">3. Lanci /review-checklist src/api.ts. Cosa succede a $ARGUMENTS nel corpo della skill?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="sostituito" data-explain="Esatto: $ARGUMENTS viene sostituito letteralmente con 'src/api.ts' ovunque compaia nel testo della skill.">Viene sostituito letteralmente con "src/api.ts"</button>
+    <button class="quiz-option" data-key="ignorato" data-explain="Non viene mai ignorato silenziosamente: anche se il testo non contenesse $ARGUMENTS, Claude Code lo appenderebbe comunque in coda come ARGUMENTS: src/api.ts.">Viene ignorato, perché la skill non lo richiede esplicitamente</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="controllo">
+  <p class="quiz-question">4. Perché disable-model-invocation: true ha senso per una skill di code review personale, e non solo per un /deploy?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="controllo" data-explain="Esatto: vuoi decidere tu il momento della review, non che parta perché la conversazione tratta di codice — lo stesso principio di /deploy, applicato a un workflow diverso.">Vuoi controllare tu quando la review parte, non Claude</button>
+    <button class="quiz-option" data-key="veloce" data-explain="Il campo non ha alcun effetto sulla velocità di esecuzione della skill — riguarda solo chi può avviarla, non le sue prestazioni.">Rende la skill più veloce da eseguire</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="tuttiprogetti">
+  <p class="quiz-question">5. Perché questa skill va in ~/.claude/skills/ (personale) invece che in .claude/skills/ di un singolo progetto?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="tuttiprogetti" data-explain="Esatto: una skill personale si applica a tutti i tuoi progetti — una checklist di review che è un tuo criterio, non una convenzione di un singolo repo, appartiene lì.">I tuoi criteri di review valgono in tutti i progetti, non solo uno</button>
+    <button class="quiz-option" data-key="veloce2" data-explain="La posizione (personale vs progetto) non ha alcun effetto sulla velocità di caricamento — determina solo la visibilità della skill tra i tuoi progetti.">Le skill personali caricano più in fretta</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p><a href="https://code.claude.com/docs/en/skills" target="_blank" rel="noopener">Extend Claude with skills — Claude Code Docs</a>, sezioni "Inject dynamic context", "Pass arguments to skills" e "Where skills live".</p>
+</div>
+
+<div class="callout ask">
+<p>Se vuoi una mano a rifinire i tuoi 4 criteri reali di review, o a decidere se questa skill dovrebbe girare in un subagent isolato (context: fork, non ancora visto) — chiedimelo. E fammi sapere quando l'hai testata su un diff vero: è quello il segnale che conta più del quiz.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://code.claude.com/docs/en/skills" target="_blank" rel="noopener">Extend Claude with skills</a>. Termini consolidati: <a href="../reference/glossary.html">Glossario</a>. Lezione precedente: <a href="0007-skill-anatomy.html">0007 — Anatomia di una Skill</a>.</p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>
