@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0010 · Costruisci il tuo primo Hook</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/diagrams.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Costruisci il tuo primo Hook: blocca il force-push</h1>
+<p class="kicker">Lezione 0010 — lezione pratica, come la 0008 per le skill: qui costruisci l'artefatto, non solo la teoria</p>
+
+<p>
+La <a href="0009-hook-anatomy.html">lezione 0009</a> ti ha dato evento → matcher → handler e la semantica degli exit
+code. Questa lezione ti fa scrivere un Hook <strong>vero</strong>, che gira davvero: blocca
+<code>git push --force</code> su qualunque repository in cui lavori, prima ancora che Claude Code ti chieda il
+permesso. È l'obiettivo dichiarato nella tua <a href="../MISSION.md">mission</a>: "ha configurato almeno un Hook...
+per automatizzare un comportamento del proprio harness".
+</p>
+
+<h2>Perché questo esempio, non un altro</h2>
+<p>
+Non è un esempio inventato: il "Git Safety Protocol" di questa stessa sessione dice esplicitamente di non fare mai
+force-push senza una richiesta esplicita — ma è una regola scritta, che il modello segue perché gliel'ho chiesto,
+non perché sia strutturalmente impossibile violarla<sup class="sidenote-ref">1</sup>. Qui trasformi quella regola in
+qualcosa che gira <em>sempre</em>, a prescindere da cosa "decide" il modello in quel momento — esattamente la
+distinzione centrale della 0009.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> Non stai duplicando una protezione già perfetta: stai aggiungendo un livello che non dipende da come il modello interpreta le istruzioni in un dato momento.</p>
+
+<h2>Due cose nuove prima di scrivere</h2>
+<p>
+<strong>Dove vive la configurazione.</strong> <code>~/.claude/settings.json</code> è personale — si applica a tutti i
+tuoi progetti, non solo a questo. Un hook di sicurezza su <code>git push</code> è per definizione qualcosa che vuoi
+ovunque, non solo qui: stessa logica già vista per le skill personali in 0008<sup class="sidenote-ref">2</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> <a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks reference — Claude Code Docs</a>, tabella "Hook Locations and Scope".</p>
+<p>
+<strong>Leggere <code>tool_input.command</code>.</strong> Il tuo script riceve JSON su stdin; <code>jq -r
+'.tool_input.command'</code> estrae la stringa del comando Bash che Claude sta per eseguire, così puoi ispezionarla
+prima che parta.
+</p>
+
+<div class="callout win">
+<p>Alla fine di questa lezione avrai: un hook personale funzionante che blocca ogni <code>git push --force</code> in qualunque tuo progetto, e saprai spiegare perché vive in <code>~/.claude/settings.json</code> e non in un file di progetto.</p>
+</div>
+
+<h2>Passo 1 — lo script</h2>
+<p>Crea la cartella e lo script che ispeziona il comando:</p>
+<pre><code>mkdir -p ~/.claude/hooks</code></pre>
+<pre><code># ~/.claude/hooks/block-force-push.sh
+#!/bin/bash
+COMMAND=$(jq -r '.tool_input.command')
+
+if echo "$COMMAND" | grep -qE 'git push .*(--force|-f)\b'; then
+  jq -n '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: "Force push bloccato da hook personale: rimuovi --force o chiedi conferma esplicita."
+    }
+  }'
+else
+  exit 0
+fi</code></pre>
+<pre><code>chmod +x ~/.claude/hooks/block-force-push.sh</code></pre>
+
+<h2>Passo 2 — registra l'hook</h2>
+<p>Aggiungi in <code>~/.claude/settings.json</code> (crealo se non esiste):</p>
+<pre><code>{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/block-force-push.sh"
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+<p>
+Nota il <code>matcher: "Bash"</code>: come nell'esempio della 0009, restringe l'hook ai soli tool call Bash — non gira
+per Read, Edit o altri tool dove <code>tool_input.command</code> non esisterebbe nemmeno.
+</p>
+
+<h2>Passo 3 — testalo davvero</h2>
+<p>
+Apri una nuova sessione di Claude Code (le modifiche a <code>settings.json</code> si caricano all'avvio) e chiedile
+di eseguire <code>git push --force</code> in un repository di prova — o anche solo <code>echo "git push --force
+origin main"</code> passato a un comando Bash reale per vedere il blocco scattare. Il feedback loop è immediato: o
+il permesso viene negato con la tua <code>permissionDecisionReason</code>, o l'hook ha un errore di sintassi da
+correggere<sup class="sidenote-ref">3</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">3.</span> Per debuggare uno script che non si comporta come previsto, testalo isolato da riga di comando: <code>echo '{"tool_input":{"command":"git push --force origin main"}}' | ~/.claude/hooks/block-force-push.sh</code> — deve stampare il JSON di deny.</p>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="personale">
+  <p class="quiz-question">1. Perché questo hook va in ~/.claude/settings.json invece che in .claude/settings.json di un singolo progetto?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="personale" data-explain="Esatto: vuoi che il blocco valga in ogni repository su cui lavori, non solo in uno specifico progetto — stessa logica di scope personale vs progetto vista per le skill.">Vuoi la protezione in tutti i tuoi progetti, non solo uno</button>
+    <button class="quiz-option" data-key="veloce3" data-explain="La posizione del file non ha alcun effetto sulla velocità di esecuzione dell'hook — determina solo a quali progetti si applica.">Gli hook personali eseguono più in fretta</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="ignorato">
+  <p class="quiz-question">2. Lanci "git push origin main" (senza --force). Cosa fa lo script?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="ignorato" data-explain="Esatto: il grep non trova --force o -f, quindi cade nel ramo else ed esce con 0 — nessuna obiezione, flusso normale.">Esce con 0, nessuna obiezione: il push procede</button>
+    <button class="quiz-option" data-key="blocca2" data-explain="Il blocco scatta solo quando il comando contiene --force o -f, per il pattern grep usato — un push senza force non lo matcha, quindi non viene bloccato.">Blocca comunque, perché il matcher è su tutti i comandi git push</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="stdin2">
+  <p class="quiz-question">3. Come fa lo script a sapere qual è il comando che Claude sta per eseguire?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="stdin2" data-explain="Esatto: jq -r '.tool_input.command' legge il JSON arrivato su stdin ed estrae la stringa del comando.">Legge tool_input.command dal JSON ricevuto su stdin</button>
+    <button class="quiz-option" data-key="filesystem" data-explain="Lo script non ispeziona il filesystem o la history della shell — riceve il comando esatto come campo di un JSON su stdin, prima ancora che venga eseguito.">Legge la history della shell dopo l'esecuzione</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="deny">
+  <p class="quiz-question">4. Quando il grep trova un match, lo script stampa JSON con permissionDecision: "deny" ed esce con 0, non con 2. Perché funziona comunque?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="deny" data-explain="Esatto: exit 0 con JSON su stdout è una decisione strutturata esplicita (qui: deny) — non serve exit 2, che è la via 'errore su stderr' per bloccare quando non stampi una decisione JSON.">Il JSON su stdout con exit 0 è già una decisione esplicita di deny</button>
+    <button class="quiz-option" data-key="sempreblocca" data-explain="Non è vero che exit 0 blocchi sempre di default — di norma exit 0 senza JSON significa 'nessuna obiezione'. Qui blocca perché lo script stampa esplicitamente un JSON con permissionDecision: deny, non per l'exit code in sé.">Perché exit 0 blocca sempre di default, exit 2 servirebbe solo per sbloccare</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="matcherbash">
+  <p class="quiz-question">5. Se Claude prova a leggere un file (tool Read) invece di lanciare Bash, questo hook interviene?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="matcherbash" data-explain="Esatto: il matcher 'Bash' restringe l'hook ai soli tool call Bash — su Read, il matcher non combacia e l'hook non gira affatto.">No: il matcher "Bash" non combacia con il tool Read</button>
+    <button class="quiz-option" data-key="girasempre" data-explain="Il matcher esiste proprio per restringere a quali tool call l'hook si applica — con matcher: 'Bash', un tool call Read non lo attiva mai.">Sì, l'hook gira su ogni tool call indipendentemente dal matcher</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p><a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks reference — Claude Code Docs</a>, sezioni "Configuration structure", "Matcher patterns" e "Complete example: PreToolUse hook" (da cui questo esempio è adattato).</p>
+</div>
+
+<div class="callout ask">
+<p>Se vuoi estendere l'hook (es. bloccare anche <code>git reset --hard</code>, o loggare ogni tentativo invece di bloccarlo silenziosamente), o discutere hook di tipo <code>prompt</code> per casi dove una regex non basta — chiedimelo. E fammi sapere quando l'hai testato davvero: è quel segnale, non il quiz, a chiudere l'asse Hook della mission.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Hooks reference</a>. Termini consolidati: <a href="../reference/glossary.html">Glossario</a>. Lezione precedente: <a href="0009-hook-anatomy.html">0009 — Anatomia di un Hook</a>.</p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>
