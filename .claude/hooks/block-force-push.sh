@@ -1,5 +1,5 @@
-# ~/.claude/hooks/block-force-push.sh
 #!/bin/bash
+# .claude/hooks/block-force-push.sh
 COMMAND=$(jq -r '.tool_input.command')
 
 if echo "$COMMAND" | grep -qE 'git push .*(--force|-f)\b'; then
