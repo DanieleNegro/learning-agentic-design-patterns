@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>0012 · Collega e testa un MCP server</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="../assets/style.css" />
+  </head>
+  <body>
+    <main class="grid">
+      <h1>Collega un MCP server, e dimostra che funziona</h1>
+      <p class="kicker">
+        Lezione 0012 — lezione pratica, come la 0008 per le skill e la 0010 per
+        gli hook
+      </p>
+
+      <p>
+        Nella <a href="0011-mcp-anatomy.html">0011</a> hai visto cosa aggiunge
+        MCP: <em>capacità</em>, cioè tool che l'harness prima non aveva. Qui ne
+        colleghi uno vero e — soprattutto — lo testi. La lezione più importante
+        della <a href="0010-build-a-hook.html">0010</a> non è arrivata dal quiz
+        ma dal debug: un hook rotto non nega, tace, e il silenzio è
+        indistinguibile dal funzionamento corretto. Con MCP succede la stessa
+        cosa, in tre punti diversi.
+      </p>
+
+      <p>
+        Il server è <code>@modelcontextprotocol/server-memory</code>, un server
+        di riferimento del progetto MCP: un <em>knowledge graph</em> persistente
+        (entità, relazioni, osservazioni) salvato in un file JSONL<sup
+          class="sidenote-ref"
+          >1</sup
+        >. È scelto per ragioni didattiche: gira in <code>stdio</code>, non ha
+        auth, ha uno stato che puoi aprire con <code>cat</code>, e ha tool di
+        scrittura <em>e</em> di cancellazione — quindi qualcosa da proteggere.
+      </p>
+      <p class="sidenote">
+        <span class="sidenote-number">1.</span>
+        <a
+          href="https://github.com/modelcontextprotocol/servers/tree/main/src/memory"
+          target="_blank"
+          rel="noopener"
+          >server-memory — modelcontextprotocol/servers</a
+        >. Versione usata e verificata per questa lezione: 2.2.1, 9 tool
+        (<code>create_entities</code>, <code>search_nodes</code>,
+        <code>read_graph</code>, <code>delete_entities</code>…).
+      </p>
+
+      <p>
+        Applica subito il criterio della 0011: in <em>questa</em> repo i
+        learning-record fanno già da memoria, quindi qui il server non vince su
+        una Skill. Vincerebbe nel caso che la 0011 chiamava "la ragione forte":
+        lo stesso grafo letto da Claude Code, Claude Desktop e da qualunque
+        altro client MCP, perché il protocollo è aperto.
+      </p>
+
+      <div class="callout win">
+        <p>
+          Alla fine di questa lezione avrai: un MCP server collegato a Claude
+          Code in questa repo, testato a tre livelli diversi, con una
+          persistenza dimostrata fra due sessioni e un Hook che impedisce al
+          modello di cancellare il grafo. Saprai dire cosa dimostra — e cosa
+          <em>non</em> dimostra — ciascuno dei tre test.
+        </p>
+      </div>
+
+      <h2>Tre livelli di test, tre cose diverse</h2>
+      <p>
+        Ogni livello prova un pezzo della catena e lascia scoperto il resto.
+        Fermarsi al primo è l'errore tipico.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Livello</th>
+            <th>Strumento</th>
+            <th>Cosa dimostra</th>
+            <th>Cosa <em>non</em> dimostra</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Handshake</strong></td>
+            <td><code>claude mcp list</code></td>
+            <td>Il processo parte e risponde al protocollo</td>
+            <td>Che un tool, chiamato, faccia la cosa giusta</td>
+          </tr>
+          <tr>
+            <td><strong>2. Protocollo</strong></td>
+            <td>MCP Inspector, <code>tools/call</code></td>
+            <td>Il server esegue un tool, senza modello di mezzo</td>
+            <td>Che lo faccia con la config che vede Claude Code</td>
+          </tr>
+          <tr>
+            <td><strong>3. End-to-end</strong></td>
+            <td>Sessione + <code>tool_result</code> + file</td>
+            <td>Harness, modello e server lavorano insieme</td>
+            <td>Nulla, se guardi il risultato e non la prosa</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Passo 1 — collega il server</h2>
+      <p>Dalla root di questa repo:</p>
+      <pre><code>claude mcp add memory \
+  -e MEMORY_FILE_PATH="$PWD/.claude/memory.jsonl" \
+  -- npx -y @modelcontextprotocol/server-memory@2.2.1
+
+echo ".claude/memory.jsonl" >> .gitignore</code></pre>
+      <p>
+        Scope <code>local</code> (il default): il grafo è roba tua, non va
+        condiviso via <code>.mcp.json</code>. Il path è
+        <strong>assoluto</strong> e lo calcola la tua shell <em>adesso</em>, al
+        momento dell'<code>add</code>: le doppie virgolette fanno espandere
+        <code>$PWD</code> prima che il valore finisca in
+        <code>~/.claude.json</code>.
+      </p>
+
+      <p>
+        Quel dettaglio non è pignoleria: viene da un tentativo fallito, fatto
+        preparando questa lezione. La prima versione usava lo scope
+        <code>project</code> con
+        <code
+          >MEMORY_FILE_PATH=${CLAUDE_PROJECT_DIR:-.}/.claude/memory.jsonl</code
+        >, pensando alla variabile che ha riparato il tuo hook. Risultato reale
+        della chiamata:
+      </p>
+      <pre><code>ENOENT: no such file or directory, open
+'~/.npm/_npx/eca8d0ea6f1ccf20/node_modules/@modelcontextprotocol/server-memory/dist/.claude/memory.jsonl.lock'</code></pre>
+      <p>
+        Due difetti in fila, come nella 0010. Primo:
+        <code>CLAUDE_PROJECT_DIR</code> viene iniettata nell'env
+        <em>del server</em>, ma non esiste quando Claude Code espande
+        <code>${…}</code> nella config — così è scattato il default
+        <code>.</code>. Secondo: il server risolve un path relativo rispetto
+        alla <em>propria</em> cartella, che con <code>npx</code> sta nella cache
+        npm<sup class="sidenote-ref">2</sup>. Se la cartella fosse esistita, il
+        grafo sarebbe finito lì, e un <code>npm cache clean</code> lo avrebbe
+        cancellato senza alcun errore.
+      </p>
+      <p class="sidenote">
+        <span class="sidenote-number">2.</span> Misurato il 2026-11-24 con un
+        <code>claude -p</code> in una cartella di prova e l'output
+        <code>stream-json</code>. La sintassi <code>${VAR}</code> e
+        <code>${VAR:-default}</code> in <code>.mcp.json</code> è documentata in
+        <a
+          href="https://code.claude.com/docs/en/mcp"
+          target="_blank"
+          rel="noopener"
+          >MCP — Claude Code Docs</a
+        >; quali variabili esistano in quel momento è un'altra questione.
+      </p>
+
+      <h2>Passo 2 — livello 1: handshake</h2>
+      <pre><code>claude mcp list | grep memory
+# memory: npx -y @modelcontextprotocol/server-memory@2.2.1 - ✔ Connected</code></pre>
+      <p>
+        <code>✔ Connected</code> vuol dire che il processo è partito e ha
+        completato l'inizializzazione del protocollo. Il server della prova
+        fallita sopra dava <em>esattamente lo stesso</em> segno di spunta: il
+        path sbagliato si scopre solo quando un tool scrive.
+      </p>
+
+      <h2>Passo 3 — livello 2: protocollo, senza modello</h2>
+      <p>
+        L'<a
+          href="https://modelcontextprotocol.io/docs/tools/inspector"
+          target="_blank"
+          rel="noopener"
+          >MCP Inspector</a
+        >
+        è il client di debug ufficiale. In modalità <code>--cli</code> parla col
+        server come farebbe Claude Code, ma senza nessun LLM a interpretare:
+        chiedi un metodo, ricevi JSON.
+      </p>
+      <pre><code>INSPECT="npx -y @modelcontextprotocol/inspector@2.16.0 --cli \
+  -e MEMORY_FILE_PATH=$PWD/.claude/memory.jsonl \
+  npx -y @modelcontextprotocol/server-memory@2.2.1"
+
+$INSPECT --method tools/list | grep '"name": "'      # i 9 tool esposti
+
+$INSPECT --method tools/call --tool-name create_entities \
+  --tool-arg 'entities=[{"name":"Daniele","entityType":"learner","observations":["completed lesson 0011"]}]'
+
+cat .claude/memory.jsonl                              # la verità sta qui</code></pre>
+      <p>
+        Se l'ultima riga mostra l'entità, il server funziona
+        <em>con quel path</em>. È lo stesso principio del
+        <code>echo '{"tool_input":…}' | script.sh</code> con cui si testava
+        l'hook isolato: togli di mezzo l'harness e interroga il componente da
+        solo.
+      </p>
+
+      <h2>Passo 4 — livello 3: end-to-end, in due sessioni</h2>
+      <p>
+        Apri una <strong>nuova</strong> sessione (la config MCP si carica
+        all'avvio) e chiedi:
+        <em>"Salva nel grafo di memoria che ho completato la lezione 0012."</em>
+        Accetta il permesso per il tool. Poi <strong>chiudi</strong>, apri
+        un'altra sessione e chiedi:
+        <em>"Cosa sai di me dal grafo di memoria?"</em>
+      </p>
+      <p>
+        La seconda risposta è il test vero: un'informazione sopravvissuta fra
+        due context window che non condividono niente. È la
+        <em>capacità</em> che prima non c'era. Due cose da guardare mentre lo
+        fai:
+      </p>
+      <ul>
+        <li>
+          <strong>Il <code>tool_result</code>, non la prosa.</strong> Nella
+          prova fallita il modello ha risposto con sicurezza citando il tool
+          chiamato, mentre il risultato reale era l'<code>ENOENT</code> di
+          sopra. Espandi la riga della tool call e leggi cosa ha restituito il
+          server; poi <code>cat .claude/memory.jsonl</code>.
+        </li>
+        <li>
+          <strong>Il nome del tool.</strong> Vedrai
+          <code>mcp__memory__create_entities</code>, preceduto da un
+          <code>ToolSearch</code>: le definizioni dei tool MCP non stanno nel
+          context dall'inizio, vengono caricate quando servono<sup
+            class="sidenote-ref"
+            >3</sup
+          >. È la risposta dell'harness al costo in context che hai visto nella
+          0011.
+        </li>
+      </ul>
+      <p class="sidenote">
+        <span class="sidenote-number">3.</span> Osservato nel trace
+        <code>stream-json</code> della prova: <code>ToolSearch</code> con
+        <code>select:mcp__memory__create_entities</code>, poi la chiamata vera.
+        Dettagli in
+        <a
+          href="https://code.claude.com/docs/en/mcp"
+          target="_blank"
+          rel="noopener"
+          >MCP — Claude Code Docs</a
+        >, sezione sul tool search.
+      </p>
+
+      <h2>Passo 5 — chiudi il cerchio con un Hook</h2>
+      <p>
+        Il tuo hook della 0010 guarda solo il matcher <code>Bash</code>; un tool
+        MCP non passa da lì. Aggiungi in <code>.claude/settings.json</code> un
+        secondo blocco nell'array <code>PreToolUse</code>, accanto a quello
+        esistente:
+      </p>
+      <pre><code>{
+  "matcher": "mcp__memory__delete_.*",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "echo 'Deleting from the memory graph is disabled' &gt;&amp;2; exit 2"
+    }
+  ]
+}</code></pre>
+      <p>
+        Il matcher è una regex sul nome <em>namespaced</em>, e copre i tre tool
+        <code>delete_entities</code>, <code>delete_observations</code> e
+        <code>delete_relations</code>. Poi il test sul
+        <strong>caso positivo</strong>, come hai imparato a fare: nuova
+        sessione, <em>"Cancella dal grafo l'entità Daniele"</em>. Deve arrivare
+        il messaggio dell'hook, e <code>cat</code> deve mostrare l'entità ancora
+        lì<sup class="sidenote-ref">4</sup>.
+      </p>
+      <p class="sidenote">
+        <span class="sidenote-number">4.</span> Verificato nella prova: l'hook
+        ha bloccato <code>mcp__memory__delete_entities</code> anche con
+        <code>--allowedTools</code> che permetteva esplicitamente quel tool. Una
+        permission rule dice cosa <em>non serve chiedere</em>; un hook con exit
+        2 su <code>PreToolUse</code> decide cosa <em>non accade</em>.
+      </p>
+
+      <h2>Mettiti alla prova</h2>
+
+      <div class="quiz" data-answer="handshake">
+        <p class="quiz-question">
+          1. <code>claude mcp list</code> mostra <code>✔ Connected</code>. Cosa
+          hai dimostrato?
+        </p>
+        <div class="quiz-options">
+          <button
+            class="quiz-option"
+            data-key="handshake"
+            data-explain="Esatto: il processo è partito e ha completato l'inizializzazione. La prova fallita col path sbagliato dava lo stesso segno di spunta — l'errore è emerso solo alla prima scrittura."
+          >
+            Che il server parte e risponde al protocollo
+          </button>
+          <button
+            class="quiz-option"
+            data-key="tools"
+            data-explain="No: il check di salute non chiama nessun tool. Un server con il path dei dati sbagliato risulta Connected come uno corretto; serve almeno un tools/call per saperlo."
+          >
+            Che i suoi tool funzionano come previsto
+          </button>
+        </div>
+        <p class="quiz-feedback" hidden></p>
+      </div>
+
+      <div class="quiz" data-answer="result">
+        <p class="quiz-question">
+          2. Claude risponde "fatto, ho salvato l'entità nel grafo". Basta come
+          prova?
+        </p>
+        <div class="quiz-options">
+          <button
+            class="quiz-option"
+            data-key="prosa"
+            data-explain="È proprio il caso osservato preparando la lezione: il modello ha descritto la chiamata come riuscita mentre il tool_result era un ENOENT. La prosa del modello è un'affermazione, non un dato."
+          >
+            Sì: il modello vede il risultato del tool
+          </button>
+          <button
+            class="quiz-option"
+            data-key="result"
+            data-explain="Esatto: la prova sta nel tool_result restituito dal server e, ancora meglio, nello stato che il tool doveva cambiare — qui il file JSONL."
+          >
+            No: controlli tool_result e file dei dati
+          </button>
+        </div>
+        <p class="quiz-feedback" hidden></p>
+      </div>
+
+      <div class="quiz" data-answer="tempo">
+        <p class="quiz-question">
+          3. Perché <code>${CLAUDE_PROJECT_DIR:-.}</code> nel valore di
+          <code>MEMORY_FILE_PATH</code> ha prodotto il default <code>.</code>?
+        </p>
+        <div class="quiz-options">
+          <button
+            class="quiz-option"
+            data-key="tempo"
+            data-explain="Esatto: la variabile viene iniettata nell'ambiente del processo server, ma l'espansione di ${…} nella config avviene prima, nell'ambiente di Claude Code, dove non c'era. Momento sbagliato, non sintassi sbagliata."
+          >
+            Esiste per il server, non all'espansione della config
+          </button>
+          <button
+            class="quiz-option"
+            data-key="sintassi"
+            data-explain="La sintassi ${VAR:-default} è supportata in .mcp.json; infatti il default è scattato correttamente. Il problema è quando la variabile esiste, non come la si scrive."
+          >
+            La sintassi con default non è supportata nella config
+          </button>
+        </div>
+        <p class="quiz-feedback" hidden></p>
+      </div>
+
+      <div class="quiz" data-answer="hook">
+        <p class="quiz-question">
+          4. Una permission rule consente
+          <code>mcp__memory__delete_entities</code>, un hook su
+          <code>PreToolUse</code> esce con 2 per lo stesso tool. Cosa succede?
+        </p>
+        <div class="quiz-options">
+          <button
+            class="quiz-option"
+            data-key="hook"
+            data-explain="Esatto, ed è stato verificato: la permission rule toglie solo la richiesta di conferma, l'hook gira comunque e con exit 2 blocca la chiamata. Il tool_result è l'errore dell'hook, il file resta intatto."
+          >
+            L'hook blocca la chiamata, nonostante la rule
+          </button>
+          <button
+            class="quiz-option"
+            data-key="rule"
+            data-explain="La permission rule decide se Claude Code deve chiederti conferma, non scavalca gli hook. Un hook PreToolUse con exit 2 blocca la chiamata anche quando la rule la consentirebbe."
+          >
+            La rule vince, e la cancellazione procede
+          </button>
+        </div>
+        <p class="quiz-feedback" hidden></p>
+      </div>
+
+      <div class="quiz" data-answer="specializzazione">
+        <p class="quiz-question">
+          5. Ripasso (<a href="0003-routing.html">0003</a>): in un routing, qual
+          è la ragione <em>strutturale</em> per scrivere un handler per
+          categoria invece di un prompt unico?
+        </p>
+        <div class="quiz-options">
+          <button
+            class="quiz-option"
+            data-key="costo"
+            data-explain="Il risparmio può arrivare (es. un modello economico sugli handler facili), ma è un effetto collaterale reso possibile dalla separazione, non la ragione per cui la si fa."
+          >
+            Ogni handler può usare un modello più economico
+          </button>
+          <button
+            class="quiz-option"
+            data-key="specializzazione"
+            data-explain="Esatto: separation of concerns. Ogni handler si ottimizza per il proprio caso, invece di un prompt che deve andare bene ovunque; il costo minore, quando c'è, è una conseguenza."
+          >
+            Ogni handler si ottimizza solo per il suo caso
+          </button>
+        </div>
+        <p class="quiz-feedback" hidden></p>
+      </div>
+
+      <div class="callout source">
+        <p>
+          Fonte primaria:
+          <a
+            href="https://modelcontextprotocol.io/docs/tools/inspector"
+            target="_blank"
+            rel="noopener"
+            >MCP Inspector — modelcontextprotocol.io</a
+          >, per il livello 2: oltre alla modalità <code>--cli</code> usata qui
+          c'è una UI web, utile quando un server espone anche
+          <em>resources</em> e <em>prompts</em>. Per la parte Claude Code resta
+          <a
+            href="https://code.claude.com/docs/en/mcp"
+            target="_blank"
+            rel="noopener"
+            >MCP — Claude Code Docs</a
+          >; per il server, il
+          <a
+            href="https://github.com/modelcontextprotocol/servers/tree/main/src/memory"
+            target="_blank"
+            rel="noopener"
+            >README di server-memory</a
+          >.
+        </p>
+      </div>
+
+      <div class="callout ask">
+        <p>
+          Quando hai fatto i cinque passi, raccontami cosa hai visto al passo 4
+          (la risposta della seconda sessione) e al passo 5 (il messaggio
+          dell'hook): così registro l'asse MCP come chiuso con un artefatto
+          reale, come per Skill e Hook. Se qualcosa non torna — un
+          <code>✔ Connected</code> che poi non scrive, un hook che non scatta —
+          chiedimelo: il debug è la parte che insegna di più. Con questo si
+          chiude l'ultimo asse di estensione; resta l'obiettivo di progettare un
+          workflow multi-step con il Claude Agent SDK.
+        </p>
+      </div>
+
+      <footer class="lesson-footer">
+        <p>
+          Fonti citate:
+          <a
+            href="https://code.claude.com/docs/en/mcp"
+            target="_blank"
+            rel="noopener"
+            >MCP — Claude Code Docs</a
+          >
+          ·
+          <a
+            href="https://modelcontextprotocol.io/docs/tools/inspector"
+            target="_blank"
+            rel="noopener"
+            >MCP Inspector</a
+          >
+          ·
+          <a
+            href="https://github.com/modelcontextprotocol/servers/tree/main/src/memory"
+            target="_blank"
+            rel="noopener"
+            >server-memory</a
+          >. Termini consolidati:
+          <a href="../reference/glossary.html">Glossario</a>. Lezione
+          precedente:
+          <a href="0011-mcp-anatomy.html">0011 — Anatomia di MCP</a>.
+        </p>
+      </footer>
+    </main>
+    <script src="../assets/quiz.js"></script>
+  </body>
+</html>

@@ -16,6 +16,10 @@
   Documentazione ufficiale di MCP *dentro Claude Code*: transport (stdio/http/sse/ws), scope (local/project/user) e precedenza, formato `.mcp.json`, OAuth e `headersHelper`, namespacing dei tool (`mcp__server__tool`), output limits, timeout e channels. Use for: configurare, debuggare o mettere in sicurezza un server MCP in Claude Code — distinta dalla spec del protocollo, che è client-agnostica. Fetchata per intero il 2026-09-11.
 - [What is the Model Context Protocol (MCP)? — modelcontextprotocol.io](https://modelcontextprotocol.io/docs/getting-started/intro)
   Specifica e introduzione ufficiale a MCP, lo standard aperto per collegare LLM a tool/dati/servizi esterni. Use for: capire quando un'integrazione va fatta come MCP server invece che come skill o tool custom.
+- [MCP Inspector — modelcontextprotocol.io](https://modelcontextprotocol.io/docs/tools/inspector)
+  Client di debug ufficiale per server MCP, in tre modalità (web UI, `--cli`, `--tui`) sullo stesso core. Use for: testare un server a livello di protocollo (`tools/list`, `tools/call`) senza un LLM di mezzo — il "livello 2" della lezione 0012. Richiede Node 22.23.4+.
+- [server-memory — modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers/tree/main/src/memory)
+  Server di riferimento: knowledge graph persistente su file JSONL, stdio, senza auth, 9 tool. Use for: banco di prova per collegare e testare un primo server MCP. Attenzione: `MEMORY_FILE_PATH` relativo viene risolto rispetto alla cartella del pacchetto (con npx, la cache npm), quindi va dato assoluto — verificato 2026-11-24 sulla 2.2.1.
 - [Introducing the Model Context Protocol — Anthropic](https://www.anthropic.com/news/model-context-protocol)
   Annuncio originale di MCP, motivazione e design goals (protocollo aperto, standardizzazione delle integrazioni). Use for: contesto storico/motivazionale su MCP.
 
