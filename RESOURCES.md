@@ -12,6 +12,8 @@
   Documentazione ufficiale sulle Skills: struttura SKILL.md, progressive disclosure, skills bundled vs custom. Use for: creare o debuggare una skill.
 - [Hooks reference — Claude Code Docs](https://code.claude.com/docs/en/hooks)
   Elenco completo degli eventi hook (PreToolUse, PostToolUse, SessionStart, Stop, ecc.), shape di input/output JSON, exit code semantics. Use for: automatizzare comportamenti deterministici nell'harness.
+- [MCP — Claude Code Docs](https://code.claude.com/docs/en/mcp)
+  Documentazione ufficiale di MCP *dentro Claude Code*: transport (stdio/http/sse/ws), scope (local/project/user) e precedenza, formato `.mcp.json`, OAuth e `headersHelper`, namespacing dei tool (`mcp__server__tool`), output limits, timeout e channels. Use for: configurare, debuggare o mettere in sicurezza un server MCP in Claude Code — distinta dalla spec del protocollo, che è client-agnostica. Fetchata per intero il 2026-09-11.
 - [What is the Model Context Protocol (MCP)? — modelcontextprotocol.io](https://modelcontextprotocol.io/docs/getting-started/intro)
   Specifica e introduzione ufficiale a MCP, lo standard aperto per collegare LLM a tool/dati/servizi esterni. Use for: capire quando un'integrazione va fatta come MCP server invece che come skill o tool custom.
 - [Introducing the Model Context Protocol — Anthropic](https://www.anthropic.com/news/model-context-protocol)

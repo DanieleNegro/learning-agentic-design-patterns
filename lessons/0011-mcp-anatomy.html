@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>0011 · Anatomia di MCP</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/diagrams.css">
+</head>
+<body>
+<main class="grid">
+
+<h1>Anatomia di MCP: aggiungere capacità, non istruzioni</h1>
+<p class="kicker">Lezione 0011 — ultimo asse scoperto della mission</p>
+
+<p>
+Hai chiuso due assi con artefatti reali: una <strong>Skill</strong> (<a href="0008-build-a-skill.html">0008</a>) e un
+<strong>Hook</strong> (<a href="0010-build-a-hook.html">0010</a>). Entrambi agiscono su ciò che Claude Code
+<em>già sa fare</em>: la Skill inietta istruzioni nel context, l'Hook esegue codice tuo a un punto fisso del ciclo di
+vita. Nessuno dei due gli dà <em>un tool che non aveva</em>.
+</p>
+<p>
+<strong>MCP</strong> (Model Context Protocol) è il terzo tipo di estensione, ed è l'unico che allarga la
+<em>superficie di tool</em> dell'harness: un processo separato espone tool, dati e prompt tramite un protocollo
+aperto, e Claude Code li monta come se fossero suoi<sup class="sidenote-ref">1</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">1.</span> <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">MCP — Claude Code Docs</a>: "MCP is an open-source standard for AI-tool integrations… MCP servers give Claude Code access to your tools, databases, and APIs."</p>
+
+<h2>Tre estensioni, tre cose diverse</h2>
+<p>
+Il perno di questa lezione è la distinzione, non la sintassi. <strong>Context</strong>, <strong>controllo</strong> e
+<strong>capacità</strong> sono tre problemi separati, e ogni meccanismo ne risolve uno solo.
+</p>
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 720 250" role="img" aria-labelledby="mcp-diagram-title">
+<title id="mcp-diagram-title">Diagramma: dentro il processo di Claude Code stanno Skill (istruzioni nel context) e Hook (codice al ciclo di vita); l'MCP server è un processo separato collegato da un transport, che espone tool namespaced all'harness.</title>
+<defs>
+  <marker id="m-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+  </marker>
+  <marker id="m-arrow-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" class="arrowhead arrowhead--accent"></path>
+  </marker>
+</defs>
+
+<text x="10" y="22" class="row-label">due processi distinti — non due file nella stessa cartella</text>
+
+<rect x="20" y="40" width="330" height="185" rx="6" class="node-box"></rect>
+<text x="185" y="64" text-anchor="middle">Claude Code (harness)</text>
+
+<rect x="42" y="82" width="286" height="52" rx="4" class="node-io"></rect>
+<text x="185" y="103" text-anchor="middle" class="label-sub">Skill → istruzioni nel context</text>
+<text x="185" y="121" text-anchor="middle" class="label-sub">risolve: cosa il modello sa</text>
+
+<rect x="42" y="150" width="286" height="52" rx="4" class="node-io"></rect>
+<text x="185" y="171" text-anchor="middle" class="label-sub">Hook → codice al ciclo di vita</text>
+<text x="185" y="189" text-anchor="middle" class="label-sub">risolve: cosa può accadere</text>
+
+<line x1="350" y1="112" x2="476" y2="112" class="edge" marker-end="url(#m-arrow)"></line>
+<text x="413" y="104" text-anchor="middle" class="label-sub">tools/call</text>
+
+<line x1="476" y1="152" x2="350" y2="152" class="edge edge--accent" marker-end="url(#m-arrow-accent)"></line>
+<text x="413" y="171" text-anchor="middle" class="label-sub">mcp__notion__search</text>
+
+<rect x="480" y="70" width="215" height="125" rx="6" class="node-box node-box--accent"></rect>
+<text x="587" y="100" text-anchor="middle">MCP server</text>
+<text x="587" y="121" text-anchor="middle" class="label-sub">processo separato</text>
+<text x="587" y="139" text-anchor="middle" class="label-sub">risolve: quali tool esistono</text>
+<text x="587" y="164" text-anchor="middle" class="label-sub">Notion, Postgres, Sentry…</text>
+<text x="587" y="182" text-anchor="middle" class="label-sub">stdio o http</text>
+</svg>
+<p class="diagram-caption">Skill e Hook vivono dentro l'harness e lavorano su capacità già esistenti. L'MCP server è fuori dal processo: parla un protocollo, e in cambio l'harness guadagna tool che prima non aveva — esposti con un nome namespaced.</p>
+</div>
+
+<h2>Tre assi: transport, scope, surface</h2>
+<p>
+Come l'Hook si leggeva in tre livelli (evento → matcher → handler), una configurazione MCP si legge su tre assi
+indipendenti<sup class="sidenote-ref">2</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">2.</span> <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">MCP — Claude Code Docs</a>, sezioni "Transport types", "MCP installation scopes" e "MCP tool naming".</p>
+
+<table>
+<thead>
+<tr><th>Asse</th><th>Cosa decide</th><th>Valori</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Transport</strong></td>
+  <td>Come Claude Code <em>parla</em> col server</td>
+  <td><code>stdio</code> (processo locale), <code>http</code> (remoto, raccomandato), <code>sse</code> (deprecato), <code>ws</code> (solo via JSON)</td>
+</tr>
+<tr>
+  <td><strong>Scope</strong></td>
+  <td>Chi <em>vede</em> il server, e se è condiviso</td>
+  <td><code>local</code> (default, privato, questo progetto), <code>project</code> (<code>.mcp.json</code>, versionato), <code>user</code> (tutti i tuoi progetti)</td>
+</tr>
+<tr>
+  <td><strong>Surface</strong></td>
+  <td>Cosa il server <em>espone</em></td>
+  <td><em>tools</em> (<code>mcp__server__tool</code>), <em>resources</em> (<code>@mention</code>), <em>prompts</em> (<code>/slash</code>)</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+I due comandi che coprono il 90% dei casi — un server locale e uno remoto. Tutto ciò che sta dopo
+<code>--</code> viene passato al server senza essere interpretato<sup class="sidenote-ref">3</sup>:
+</p>
+<p class="sidenote"><span class="sidenote-number">3.</span> Dimenticare il <code>--</code> è l'errore classico: Claude Code prova a parsare i flag del server come suoi. Nell'ambiente dello stdio server viene iniettata <code>CLAUDE_PROJECT_DIR</code> — la stessa variabile che è servita a riparare il tuo hook nella <a href="0010-build-a-hook.html">0010</a>.</p>
+
+<pre><code># stdio: un processo locale, con env var
+claude mcp add --transport stdio db --env PGPASSWORD=segreto \
+  -- npx -y @bytebase/dbhub --dsn "postgresql://readonly@localhost/analytics"
+
+# http: un server remoto, condiviso col team via .mcp.json
+claude mcp add --transport http --scope project notion https://mcp.notion.com/mcp
+
+claude mcp list     # stato di salute di ogni server
+/mcp                # pannello dentro la sessione: auth, enable/disable</code></pre>
+
+<p>
+Lo scope <code>project</code> è quello che si committa, e per questo ha una regola di sicurezza sua: un server
+dichiarato in <code>.mcp.json</code> richiede la tua <strong>approvazione esplicita</strong> in sessione
+interattiva — ma in <code>claude -p</code>, nell'Agent SDK e nelle sessioni cloud viene caricato senza
+chiedere<sup class="sidenote-ref">4</sup>. Un <code>.mcp.json</code> che arriva da una pull request è codice
+eseguibile che entra nel tuo harness.
+</p>
+<p class="sidenote"><span class="sidenote-number">4.</span> <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">MCP — Claude Code Docs</a>, "Project scope → Approvals". Reset delle scelte con <code>claude mcp reset-project-choices</code>.</p>
+
+<h2>Il criterio di scelta: quando MCP <em>non</em> conviene</h2>
+<p>
+L'obiettivo di mission non è "collegare un server", è sapere <em>quando</em> MCP è la scelta giusta rispetto a una
+Skill o a un tool custom. La documentazione dà un'euristica sobria: collega un server quando ti accorgi di
+<strong>copiare dati a mano nella chat</strong> da un altro sistema<sup class="sidenote-ref">5</sup>.
+</p>
+<p class="sidenote"><span class="sidenote-number">5.</span> <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">MCP — Claude Code Docs</a>: "Connect a server when you find yourself copying data into chat from another tool."</p>
+<p>
+Il rovescio conta di più, perché è quello che si sbaglia. MCP ha un costo che una Skill non ha: le definizioni dei
+tool occupano <strong>context window</strong>, e l'output di un tool ha un tetto — warning a 10.000 token, massimo
+di default 25.000, oltre il quale il risultato viene scritto su file e sostituito dal path<sup class="sidenote-ref">6</sup>.
+Quindi:
+</p>
+<p class="sidenote"><span class="sidenote-number">6.</span> <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">MCP — Claude Code Docs</a>, "MCP output limits". Il tetto si alza con <code>MAX_MCP_OUTPUT_TOKENS</code>.</p>
+<ul>
+<li><strong>Esiste già una CLI</strong> (<code>gh</code>, <code>psql</code>, <code>kubectl</code>)? Una Skill che insegna a Claude come usarla via Bash costa quasi nulla e non aggiunge un processo. Riesporre quella CLI dietro un MCP server è lavoro in più per lo stesso risultato.</li>
+<li><strong>Il sistema è remoto, API-only, o con auth complicata</strong> (OAuth, token a vita breve)? Qui MCP guadagna il suo posto: gestisce il flusso di login, il refresh dei token e li tiene fuori dal tuo codice.</li>
+<li><strong>Serve in più client</strong> (Claude Code, Claude Desktop, Cursor)? Questa è la ragione forte, e non è la potenza: è che il protocollo è <em>aperto</em>. Un server si scrive una volta e vale per tutti; una Skill vale solo dentro Claude Code.</li>
+</ul>
+
+<p>
+Ultimo dettaglio operativo che tornerà utile: i tool MCP arrivano al modello con nome
+<code>mcp__&lt;server&gt;__&lt;tool&gt;</code>. È quel nome completo — non quello interno del server — che va scritto
+nelle permission rule, negli <code>allowed-tools</code> di una Skill, nel campo <code>tools</code> di un subagent e
+nei <strong>matcher degli Hook</strong><sup class="sidenote-ref">7</sup>. Il tuo hook della 0010 sorveglia il matcher
+<code>Bash</code>: un tool MCP non passa da lì.
+</p>
+<p class="sidenote"><span class="sidenote-number">7.</span> <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">MCP — Claude Code Docs</a>, "MCP tool naming and namespacing". Ogni carattere fuori da <code>A-Z a-z 0-9 _ -</code> diventa <code>_</code>.</p>
+
+<div class="callout win">
+<p>Alla fine di questa lezione saprai: dire in una frase cosa aggiunge MCP che Skill e Hook non possono aggiungere, leggere una configurazione sui tre assi transport / scope / surface, riconoscere il caso in cui una Skill batte un MCP server, e sapere con quale nome un tool MCP va citato in una permission rule o in un matcher.</p>
+</div>
+
+<h2>Mettiti alla prova</h2>
+
+<div class="quiz" data-answer="tool">
+  <p class="quiz-question">1. Cosa aggiunge un MCP server che né una Skill né un Hook possono aggiungere?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="tool" data-explain="Esatto: MCP allarga la superficie di tool dell'harness. Il server è un processo separato che espone tool, resources e prompts; Skill e Hook lavorano invece su capacità che Claude Code ha già.">Aggiunge tool nuovi, da un processo separato</button>
+    <button class="quiz-option" data-key="regole" data-explain="Questa è la Skill: istruzioni iniettate nel context. MCP non serve a dire al modello COME comportarsi, ma a dargli tool che prima non esistevano nell'harness.">Aggiunge regole nuove, nel context del modello</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="skill">
+  <p class="quiz-question">2. Usi <code>gh</code> da anni e vuoi che Claude gestisca le tue PR. Qual è la scelta più economica?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="skill" data-explain="Esatto: la CLI esiste già e Claude sa usare Bash. Una Skill che insegna il workflow costa quasi nulla, non aggiunge un processo e non occupa context con definizioni di tool.">Una Skill che usa la CLI esistente</button>
+    <button class="quiz-option" data-key="mcp" data-explain="Riesporre una CLI che già funziona dietro un MCP server è lavoro in più per lo stesso risultato, e in più le definizioni dei tool occupano context window. MCP guadagna il suo posto quando la CLI NON esiste, o l'auth è complicata.">Un MCP server che riespone la CLI</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="project">
+  <p class="quiz-question">3. Vuoi che tutto il team ottenga lo stesso server clonando la repo. Quale scope usi?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="project" data-explain="Esatto: lo scope project scrive in .mcp.json nella root del progetto, che si committa. Nota la regola di sicurezza: in sessione interattiva serve la tua approvazione esplicita, ma in claude -p, Agent SDK e sessioni cloud il server viene caricato senza chiedere.">Project scope, nel file .mcp.json</button>
+    <button class="quiz-option" data-key="local" data-explain="Local è il default ed è privato: sta in ~/.claude.json sotto il path del progetto, quindi non arriva a nessun altro clonando la repo. È anche lo scope a precedenza più alta tra i tre.">Local scope, nel file ~/.claude.json</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="completo">
+  <p class="quiz-question">4. Devi consentire esplicitamente un tool del server <code>notion</code> in una permission rule. Come lo citi?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="completo" data-explain="Esatto: il nome namespaced mcp__notion__search è quello che il modello vede, e quello che va scritto in permission rule, allowed-tools di una Skill, campo tools di un subagent e matcher degli Hook.">Con il nome namespaced mcp__notion__search</button>
+    <button class="quiz-option" data-key="interno" data-explain="Il nome interno del server non è quello esposto al modello: Claude Code lo prefissa come mcp__&lt;server&gt;__&lt;tool&gt;. Una rule scritta sul nome corto non combacia con nulla.">Con il nome interno, search, soltanto</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="quiz" data-answer="chaining">
+  <p class="quiz-question">5. Ripasso (<a href="0006-evaluator-optimizer.html">0006</a>): tre <code>agent()</code> in sequenza, ognuno sull'output del precedente, senza mai tornare indietro. È evaluator-optimizer?</p>
+  <div class="quiz-options">
+    <button class="quiz-option" data-key="chaining" data-explain="Esatto. L'euristica è una sola: il flusso torna indietro a rigenerare uno step già eseguito? Qui no — è prompt chaining. Evaluator-optimizer richiede il ciclo, non la sequenza.">No: manca il ritorno indietro, è chaining</button>
+    <button class="quiz-option" data-key="sequenza" data-explain="Più chiamate LLM in sequenza non bastano: anche prompt chaining le ha. Ciò che definisce evaluator-optimizer è il ciclo — un valutatore che rimanda indietro l'output con feedback perché venga rigenerato.">Sì: più chiamate LLM in sequenza bastano</button>
+  </div>
+  <p class="quiz-feedback" hidden></p>
+</div>
+
+<div class="callout source">
+<p>Fonte primaria: <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">MCP — Claude Code Docs</a>, da leggere per intero prima della lezione pratica. Qui hai visto i tre assi e il criterio di scelta; restano fuori parecchie cose che la pagina copre — <code>headersHelper</code> per auth non-OAuth, i timeout e il backgrounding delle chiamate lunghe, i <em>channels</em> (server che spingono messaggi dentro la sessione), e <code>claude mcp serve</code>, che espone Claude Code stesso come MCP server. Per il protocollo in sé, indipendente da Claude Code: <a href="https://modelcontextprotocol.io/docs/getting-started/intro" target="_blank" rel="noopener">modelcontextprotocol.io</a>.</p>
+</div>
+
+<div class="callout ask">
+<p>La prossima lezione ti farà collegare un server vero e testarlo, come è successo per la Skill (0008) e per l'Hook (0010). Un vincolo da sapere adesso: i connector di claude.ai richiedono un login OAuth che una sessione non interattiva non può eseguire, quindi partiremo da un server <code>stdio</code> locale. Se vuoi discutere quale sistema collegare per primo — o capire dove finisce MCP e dove conviene ancora un tool custom nell'Agent SDK — chiedimelo.</p>
+</div>
+
+<footer class="lesson-footer">
+<p>Fonti citate: <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">MCP — Claude Code Docs</a>. Termini consolidati: <a href="../reference/glossary.html">Glossario</a>. Lezione precedente: <a href="0010-build-a-hook.html">0010 — Costruisci il tuo primo Hook</a>.</p>
+</footer>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>
